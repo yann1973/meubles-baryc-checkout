@@ -1,0 +1,196 @@
+<!-- Informations client -->
+<section class="rounded-2xl border border-neutral-200 bg-white p-5 shadow-sm" id="clientSection">
+  <h2 class="text-xl font-semibold mb-4">Informations client</h2>
+  <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+    <label class="block text-sm">
+      <span class="text-neutral-700">Nom *</span>
+      <input id="nom" required class="mt-1 w-full rounded-xl border border-neutral-300 px-3 py-2" />
+    </label>
+    <label class="block text-sm">
+      <span class="text-neutral-700">Prénom *</span>
+      <input id="prenom" required class="mt-1 w-full rounded-xl border border-neutral-300 px-3 py-2" />
+    </label>
+    <label class="block text-sm">
+      <span class="text-neutral-700">Téléphone (10 chiffres) *</span>
+      <input id="telephone" required type="tel" inputmode="numeric" pattern="\d{10}" maxlength="10" title="10 chiffres sans espaces" class="mt-1 w-full rounded-xl border border-neutral-300 px-3 py-2" />
+      <span id="telError" class="text-xs text-rose-600"></span>
+    </label>
+    <label class="block text-sm">
+      <span class="text-neutral-700">Email *</span>
+      <input id="email" required type="email" class="mt-1 w-full rounded-xl border border-neutral-300 px-3 py-2" />
+      <span id="emailError" class="text-xs text-rose-600"></span>
+    </label>
+    <label class="block text-sm md:col-span-2">
+      <span class="text-neutral-700">Adresse client *</span>
+      <input id="clientAddressMain" required class="mt-1 w-full rounded-xl border border-neutral-300 px-3 py-2" placeholder="Ex: 12 rue Exemple, 56100 Lorient" />
+      <span id="addrClientError" class="text-xs text-rose-600"></span>
+    </label>
+    <label class="block text-sm md:col-span-2">
+      <span class="text-neutral-700">Comment nous avez-vous connu ?</span>
+      <select id="connaissance" class="mt-1 w-full rounded-xl border border-neutral-300 px-3 py-2 bg-white">
+        <option value="">— Sélectionner —</option>
+        <option>Recherche Google</option>
+        <option>Réseaux sociaux — Instagram</option>
+        <option>Réseaux sociaux — TikTok</option>
+        <option>Réseaux sociaux — Facebook</option>
+        <option>Bouche à oreille</option>
+        <option>Recommandation professionnel (architecte/décorateur)</option>
+        <option>Salon / exposition</option>
+        <option>Passé devant l’atelier</option>
+        <option>Publicité locale</option>
+        <option>Leboncoin / Marketplace</option>
+        <option>Ancien client</option>
+        <option>Autre</option>
+      </select>
+    </label>
+  </div>
+  <div class="mt-3">
+    <label class="block text-sm">
+      <span class="text-neutral-700">Description du projet</span>
+      <input id="description" class="mt-1 w-full rounded-xl border border-neutral-300 px-3 py-2" placeholder="Précisez votre projet..."/>
+    </label>
+  </div>
+  <div id="clientErrors" class="mt-3 text-sm text-rose-600"></div>
+</section>
+
+<!-- Type & dimensions -->
+<section class="rounded-2xl border border-neutral-200 bg-white p-5 shadow-sm">
+  <h2 class="text-xl font-semibold mb-4">Type & dimensions</h2>
+  <div id="typeButtons" class="grid grid-cols-2 md:grid-cols-5 gap-2 mb-4"></div>
+  <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
+    <label class="block text-sm"><span class="text-neutral-700">Longueur (m)</span><input id="longueur" type="number" step="0.01" min="0" class="mt-1 w-full rounded-xl border border-neutral-300 px-3 py-2" value="0"/></label>
+    <label class="block text-sm"><span class="text-neutral-700">Profondeur (m)</span><input id="largeur" type="number" step="0.01" min="0" class="mt-1 w-full rounded-xl border border-neutral-300 px-3 py-2" value="0"/></label>
+    <label class="block text-sm"><span class="text-neutral-700">Hauteur (m)</span><input id="hauteur" type="number" step="0.01" min="0" class="mt-1 w-full rounded-xl border border-neutral-300 px-3 py-2" value="0"/></label>
+  </div>
+  <div class="mt-3">
+    <div class="px-4 py-4 rounded-2xl border border-neutral-200 bg-neutral-50 flex items-center justify-between">
+      <span class="text-neutral-600">Surface à traiter</span>
+      <span id="surfaceDisplay" class="text-3xl font-semibold">0,00 m²</span>
+    </div>
+  </div>
+</section>
+
+<!-- Services -->
+<section class="rounded-2xl border border-neutral-200 bg-white p-5 shadow-sm">
+  <h2 class="text-xl font-semibold mb-4">Services</h2>
+  <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+    <div class="rounded-2xl border border-neutral-200 bg-white p-4">
+      <h3 class="text-lg font-semibold mb-2">Services au m²</h3>
+      <div id="servicesM2" class="grid grid-cols-1 sm:grid-cols-2 gap-2 text-sm"></div>
+    </div>
+    <div class="rounded-2xl border border-neutral-200 bg-white p-4">
+      <h3 class="text-lg font-semibold mb-2">À la pièce</h3>
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <label class="block text-sm"><span class="text-neutral-700">Changement de ferrures (18 €/pièce)</span><input id="f_change" type="number" step="1" min="0" class="mt-1 w-full rounded-xl border border-neutral-300 px-3 py-2" value="0"/></label>
+        <label class="block text-sm"><span class="text-neutral-700">Polissage des ferrures (12 €/pièce)</span><input id="f_polish" type="number" step="1" min="0" class="mt-1 w-full rounded-xl border border-neutral-300 px-3 py-2" value="0"/></label>
+      </div>
+    </div>
+  </div>
+</section>
+<!-- Transport -->
+<section class="rounded-2xl border border-neutral-200 bg-white p-5 shadow-sm">
+  <h2 class="text-xl font-semibold mb-4">Transport</h2>
+
+  <div class="grid grid-cols-1 md:grid-cols-3 gap-3 items-end">
+    <!-- Mode -->
+    <label class="block text-sm">
+      <span class="text-neutral-700">Mode</span>
+      <select id="transportMode" class="mt-1 w-full rounded-xl border border-neutral-300 px-3 py-2">
+        <option value="baryc">Récupération & Livraison (par nos soins)</option>
+        <option value="client" selected>Transport à vos soins</option>
+      </select>
+    </label>
+
+    <!-- Adresse de récupération -->
+    <label class="block text-sm md:col-span-2">
+      <span class="text-neutral-700">Adresse de récupération</span>
+      <input id="transportAddressPickup" class="mt-1 w-full rounded-xl border border-neutral-300 px-3 py-2" placeholder="Ex: 13 rue Exemple, 56700 Hennebont" />
+    </label>
+
+    <!-- Options -->
+    <div class="md:col-span-3 flex items-center gap-4 text-sm">
+      <label class="inline-flex items-center gap-2">
+        <input id="sameAsClient" type="checkbox" class="w-4 h-4">
+        <span>Utiliser l’adresse client comme adresse de récupération</span>
+      </label>
+      <label class="inline-flex items-center gap-2">
+        <input id="deliveryDifferent" type="checkbox" class="w-4 h-4">
+        <span>Adresse de livraison différente ?</span>
+      </label>
+    </div>
+
+    <!-- Adresse de livraison -->
+    <label id="deliveryAddressWrap" class="block text-sm md:col-span-3 hidden">
+      <span class="text-neutral-700">Adresse de livraison</span>
+      <input id="transportAddressDelivery" class="mt-1 w-full rounded-xl border border-neutral-300 px-3 py-2" placeholder="Ex: 24 avenue Exemple, 56100 Lorient" />
+    </label>
+
+    <!-- Aperçu rapide auto / saisie manuelle -->
+    <div class="md:col-span-3">
+      <div class="flex items-center justify-between">
+        <span class="text-sm text-neutral-700">Distance totale (km)</span>
+        <label class="text-xs flex items-center gap-1">
+          <input id="manualDistanceToggle" type="checkbox" />
+          Saisir manuellement
+        </label>
+      </div>
+
+      <!-- affichage auto rempli par JS -->
+      <div id="distanceAutoBlock" class="mt-1 px-3 py-2 rounded-2xl border border-neutral-300 bg-neutral-50 text-sm">
+        0 km
+      </div>
+
+      <!-- champ manuel masqué par défaut -->
+      <input id="distanceManual" type="number" step="0.1" min="0"
+             class="hidden mt-1 w-full rounded-2xl border border-neutral-300 px-3 py-2" value="0"/>
+    </div>
+
+    <!-- Infos service -->
+    <div class="md:col-span-3 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
+      <div class="font-medium mb-1">Ce que comprend notre service de transport</div>
+      <ul class="list-disc pl-5 space-y-1">
+        <li>2 manutentions complètes (chargement et déchargement) par trajet</li>
+        <li>Protection professionnelle des meubles (housses, calages)</li>
+        <li>Planification du créneau et rappel</li>
+        <li>Équipe Meubles Baryc dédiée & assurance transport incluse</li>
+      </ul>
+      <div id="promoBadge" class="mt-2 hidden">
+        <span class="inline-flex items-center gap-1 rounded-full bg-emerald-100 text-emerald-800 text-xs px-2 py-1">
+          Remise multi-meubles appliquée
+        </span>
+      </div>
+    </div>
+
+    <!-- Barème -->
+    <div class="md:col-span-3 rounded-2xl border border-neutral-200 bg-white p-4">
+      <div class="flex items-center justify-between">
+        <h3 class="text-sm font-semibold">Barème kilométrique (distance totale = récup A/R + livraison A/R)</h3>
+      </div>
+      <div class="mt-3 overflow-x-auto">
+        <table class="w-full text-sm">
+          <thead>
+            <tr class="text-left text-neutral-500">
+              <th class="py-2 pr-4">Tranche (km)</th>
+              <th class="py-2 pr-4">Tarif TTC</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-neutral-200">
+            <tr><td class="py-2 pr-4">0 – 9,9</td><td class="py-2 pr-4">79,90 €</td></tr>
+            <tr><td class="py-2 pr-4">10 – 19,9</td><td class="py-2 pr-4">99,90 €</td></tr>
+            <tr><td class="py-2 pr-4">20 – 29,9</td><td class="py-2 pr-4">119,90 €</td></tr>
+            <tr><td class="py-2 pr-4">30 – 39,9</td><td class="py-2 pr-4">149,90 €</td></tr>
+            <tr><td class="py-2 pr-4">≥ 40</td><td class="py-2 pr-4">149,90 € + 3,00 €/km</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <p class="mt-2 text-xs text-neutral-500">
+        Une majoration logistique peut s’appliquer si plusieurs meubles sont regroupés dans une même commande.
+      </p>
+    </div>
+  </div>
+
+  <div class="mt-2 text-sm">
+    Adresse de référence : <span class="font-medium">Meubles Baryc, 13 Rue du Cabotage, 56700 Hennebont, France</span>
+  </div>
+</section>

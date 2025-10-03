@@ -1,0 +1,94 @@
+<section class="rounded-2xl border border-neutral-200 bg-white p-5 shadow-sm">
+  <h2 class="text-xl font-semibold mb-3">Panier</h2>
+
+  <div id="cartEmpty" class="text-sm text-neutral-500">Votre panier est vide.</div>
+
+  <div id="cartBlock" class="rounded-2xl border border-neutral-200 bg-white p-4 shadow-sm hidden">
+    <div id="cartItems" class="space-y-3"></div>
+
+    <div class="h-px w-full bg-neutral-200 my-3"></div>
+
+    <!-- Totaux MEUBLES -->
+    <div class="space-y-1 text-sm">
+      <div class="font-semibold">Meubles</div>
+      <div class="flex items-center justify-between"><span>Total HT meubles</span><span id="cartGoodsHT">0,00 €</span></div>
+      <div class="flex items-center justify-between"><span>TVA (20%)</span><span id="cartGoodsTVA">0,00 €</span></div>
+      <div class="flex items-center justify-between"><span>Total TTC meubles</span><span id="cartGoodsTTC">0,00 €</span></div>
+    </div>
+
+    <div class="h-px w-full bg-neutral-200 my-3"></div>
+
+
+<!-- Transport d’ordre (une seule fois) -->
+<div id="cartTransportBox" class="space-y-1 text-sm hidden">
+  <div class="font-semibold">Transport</div>
+
+  <div class="flex items-center justify-between" data-row>
+    <span>Base barème</span><span id="cartTransportBase">—</span>
+  </div>
+
+  <!-- Majoration logistique (+15% par meuble supplémentaire) -->
+  <div id="cartTransportMajLine" class="flex items-center justify-between hidden" data-row>
+    <span id="cartTransportMajLabel">Majoration logistique</span>
+    <span id="cartTransportMajAmount">+0,00 €</span>
+  </div>
+
+  <!-- Totaux transport détaillés -->
+  <div class="flex items-center justify-between"><span>Total HT transport</span><span id="cartTransportHT">0,00 €</span></div>
+  <div class="flex items-center justify-between"><span>TVA (20%)</span><span id="cartTransportTVA">0,00 €</span></div>
+  <div class="flex items-center justify-between"><span>Total TTC transport</span><span id="cartTransportTTC">0,00 €</span></div>
+
+  <!-- Détail (km + tranche) -->
+  <div id="cartTransportInfo" class="text-[12px] text-neutral-500 mt-1"></div>
+</div>
+
+
+
+
+
+
+    <div class="h-px w-full bg-neutral-200 my-3"></div>
+
+    <!-- TOTAL COMMANDE -->
+    <div class="space-y-1 text-sm">
+      <div class="font-semibold">Total commande</div>
+      <div class="flex items-center justify-between"><span>Total HT</span><span id="cartGrandHT">0,00 €</span></div>
+      <div class="flex items-center justify-between"><span>TVA (20%)</span><span id="cartGrandTVA">0,00 €</span></div>
+      <div class="flex items-center justify-between text-base font-semibold"><span>Total TTC</span><span id="cartGrandTTC">0,00 €</span></div>
+    </div>
+
+    <div class="flex gap-2 mt-3">
+      <button id="cartClear" class="px-4 py-2 rounded-2xl border border-neutral-300 hover:bg-neutral-100">Vider</button>
+      <button id="cartPay" class="px-5 py-2.5 rounded-2xl text-white bg-neutral-900 hover:bg-black">Payer en ligne</button>
+    </div>
+  </div>
+</section>
+
+<section class="rounded-2xl border border-neutral-200 bg-white p-5 shadow-sm">
+  <h2 class="text-xl font-semibold mb-4">Récapitulatif</h2>
+  <div class="grid grid-cols-1 gap-3 text-sm mb-4">
+    <div class="flex items-center justify-between"><span class="text-neutral-600">Surface à traiter</span><span id="totalSurface">0,00 m²</span></div>
+    <div class="flex items-center justify-between"><span class="text-neutral-600">Prix HT</span><span id="prixHT">0,00 €</span></div>
+    <div class="flex items-center justify-between"><span class="text-neutral-600">TVA 20%</span><span id="prixTVA">0,00 €</span></div>
+    <div class="flex items-center justify-between"><span class="text-neutral-600">Transport TTC</span><span id="prixTransport">0,00 €</span></div>
+    <div id="transportTarifInfo" class="text-xs text-neutral-500"></div>
+    <div id="recapTransportDetail" class="text-sm text-neutral-700 mt-1"></div>
+    <div class="h-px bg-neutral-200"></div>
+    <div class="flex items-center justify-between text-base font-semibold"><span>Total TTC</span><span id="prixTTC">0,00 €</span></div>
+  </div>
+
+  <div>
+    <h3 class="text-sm font-semibold mb-2">Prestations</h3>
+    <ul id="recapServices" class="text-sm text-neutral-700 list-disc pl-5 space-y-1"></ul>
+  </div>
+
+  <div class="mt-4">
+    <button id="addToCart" class="w-full px-4 py-2 rounded-2xl border border-neutral-300 hover:bg-neutral-100">
+      Ajouter au panier
+    </button>
+    <button id="btnClearRecap" class="w-full mt-2 px-4 py-2 rounded-2xl border border-neutral-300 hover:bg-neutral-100">
+      Vider le récapitulatif
+    </button>
+    <span id="message" class="block mt-2 text-xs text-neutral-500"></span>
+  </div>
+</section>

@@ -1,0 +1,39 @@
+# Node / runtime
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+package-lock.json
+pnpm-lock.yaml
+yarn.lock
+
+# Env (ne jamais committer tes secrets)
+.env
+.env.local
+.env.*.local
+
+# OS / éditeurs
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+
+# Builds / caches
+dist/
+build/
+coverage/
+.cache/
+.parcel-cache/
+.vite/
+.next/
+out/
+.vercel/
+.netlify/
+
+# Front config privé (clé Google Maps côté client)
+public/js/config.js
+
+# Divers
+*.zip

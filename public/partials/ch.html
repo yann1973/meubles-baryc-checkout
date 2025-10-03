@@ -1,0 +1,58 @@
+<div class="max-w-7xl mx-auto px-4 py-6 lg:py-8">
+  <div class="grid grid-cols-1 lg:grid-cols-[1fr_380px] gap-8">
+    <div class="space-y-6">
+      <section class="rounded-2xl border border-neutral-200 bg-white p-5 shadow-sm">
+        <h2 class="text-xl font-semibold">Coût horaire — Paramètres</h2>
+        <p class="text-xs text-neutral-500 mt-1">Calcule ton coût de revient horaire interne.</p>
+
+        <h3 class="mt-4 mb-2 font-medium">Capacité & productivité</h3>
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <label class="block text-sm"><span>Heures facturables / mois</span><input id="ch_heuresFacturablesMois" type="number" step="1" value="110" class="mt-1 w-full rounded-xl border border-neutral-300 px-3 py-2"></label>
+          <label class="block text-sm"><span>Taux non productif (%)</span><input id="ch_tauxNonProductif" type="number" step="1" value="15" class="mt-1 w-full rounded-xl border border-neutral-300 px-3 py-2"></label>
+        </div>
+
+        <h3 class="mt-5 mb-2 font-medium">Coûts fixes mensuels</h3>
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <label class="block text-sm"><span>Loyer</span><input id="ch_loyer" type="number" step="1" value="600" class="mt-1 w-full rounded-xl border border-neutral-300 px-3 py-2"></label>
+          <label class="block text-sm"><span>Eau + électricité</span><input id="ch_eauElec" type="number" step="1" value="100" class="mt-1 w-full rounded-xl border border-neutral-300 px-3 py-2"></label>
+          <label class="block text-sm"><span>Assurances</span><input id="ch_assurances" type="number" step="1" value="200" class="mt-1 w-full rounded-xl border border-neutral-300 px-3 py-2"></label>
+          <label class="block text-sm"><span>Internet + site</span><input id="ch_internetSite" type="number" step="1" value="300" class="mt-1 w-full rounded-xl border border-neutral-300 px-3 py-2"></label>
+          <label class="block text-sm"><span>Comptable</span><input id="ch_comptable" type="number" step="1" value="350" class="mt-1 w-full rounded-xl border border-neutral-300 px-3 py-2"></label>
+          <label class="block text-sm"><span>Carburant</span><input id="ch_carburant" type="number" step="1" value="350" class="mt-1 w-full rounded-xl border border-neutral-300 px-3 py-2"></label>
+          <label class="block text-sm"><span>Mensualité prêt</span><input id="ch_mensualitePret" type="number" step="1" value="408" class="mt-1 w-full rounded-xl border border-neutral-300 px-3 py-2"></label>
+          <label class="block text-sm"><span>Amortissements</span><input id="ch_amortissementsMensuels" type="number" step="1" value="150" class="mt-1 w-full rounded-xl border border-neutral-300 px-3 py-2"></label>
+          <label class="block text-sm"><span>Autres fixes</span><input id="ch_autresFixes" type="number" step="1" value="0" class="mt-1 w-full rounded-xl border border-neutral-300 px-3 py-2"></label>
+        </div>
+
+        <h3 class="mt-5 mb-2 font-medium">Main d’œuvre</h3>
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <label class="block text-sm"><span>Salaire NET souhaité (€/mois)</span><input id="ch_salaireNetSouhaite" type="number" step="1" value="1800" class="mt-1 w-full rounded-xl border border-neutral-300 px-3 py-2"></label>
+          <label class="block text-sm"><span>Coeff. Net → Brut (×)</span><input id="ch_coeffNetToBrut" type="number" step="0.01" value="1.28" class="mt-1 w-full rounded-xl border border-neutral-300 px-3 py-2"></label>
+          <label class="block text-sm"><span>Charges sociales (% du BRUT)</span><input id="ch_chargesSocialesPct" type="number" step="1" value="45" class="mt-1 w-full rounded-xl border border-neutral-300 px-3 py-2"></label>
+        </div>
+
+        <h3 class="mt-5 mb-2 font-medium">Variables par heure</h3>
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <label class="block text-sm"><span>Consommables (€/h)</span><input id="ch_consommablesHeure" type="number" step="0.1" value="3" class="mt-1 w-full rounded-xl border border-neutral-300 px-3 py-2"></label>
+          <label class="block text-sm"><span>Entretien / usure (€/h)</span><input id="ch_entretienHeure" type="number" step="0.1" value="2" class="mt-1 w-full rounded-xl border border-neutral-300 px-3 py-2"></label>
+        </div>
+      </section>
+    </div>
+
+    <aside class="lg:sticky lg:top-24 h-max">
+      <section class="rounded-2xl border border-neutral-200 bg-white p-5 shadow-sm">
+        <h2 class="text-xl font-semibold mb-3">Coût horaire — Résultats</h2>
+        <div class="space-y-2 text-sm">
+          <div class="flex items-center justify-between"><span>Heures productives / mois</span><span id="ch_out_heuresProductives">0,0 h</span></div>
+          <div class="flex items-center justify-between"><span>Coûts fixes mensuels</span><span id="ch_out_coutsFixes">0,00 €</span></div>
+          <div class="flex items-center justify-between"><span>Coût employeur (mois)</span><span id="ch_out_coutEmployeur">0,00 €</span></div>
+          <div class="flex items-center justify-between"><span>Charges mensuelles totales</span><span id="ch_out_chargesTotales">0,00 €</span></div>
+          <div class="flex items-center justify-between"><span>Coût fixe par heure</span><span id="ch_out_coutFixeH">0,00 €</span></div>
+          <div class="flex items-center justify-between"><span>Variables par heure</span><span id="ch_out_varH">0,00 €</span></div>
+          <div class="h-px bg-neutral-200"></div>
+          <div class="flex items-center justify-between text-base font-semibold"><span>Coût de revient horaire</span><span id="ch_out_crh">0,00 €</span></div>
+        </div>
+      </section>
+    </aside>
+  </div>
+</div>

@@ -1,0 +1,65 @@
+<div class="max-w-7xl mx-auto px-4 py-6 lg:py-8">
+  <div class="grid grid-cols-1 lg:grid-cols-[1fr_380px] gap-8">
+    <div class="space-y-6">
+      <section class="rounded-2xl border border-neutral-200 bg-white p-5 shadow-sm">
+        <h2 class="text-xl font-semibold">Coût de revient — Paramètres</h2>
+        <p class="text-xs text-neutral-500 mt-1">Ces paramètres n’affectent pas les prix clients (onglet Devis). Ils servent à estimer ton coût interne.</p>
+
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mt-4">
+          <label class="block text-sm"><span>Coût horaire main d’œuvre (€/h)</span><input id="cr_cout_h" type="number" step="0.1" value="45" class="mt-1 w-full rounded-xl border border-neutral-300 px-3 py-2"></label>
+          <label class="block text-sm"><span>Manutention par déplacement (h)</span><input id="cr_handling_h" type="number" step="0.1" value="0.5" class="mt-1 w-full rounded-xl border border-neutral-300 px-3 py-2"></label>
+          <label class="block text-sm"><span>Inclure transport du devis</span>
+            <select id="cr_include_transport" class="mt-1 w-full rounded-xl border border-neutral-300 px-3 py-2 bg-white">
+              <option value="yes" selected>Oui</option><option value="no">Non</option>
+            </select>
+          </label>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
+          <div class="rounded-2xl border border-neutral-200 bg-white p-4">
+            <div class="font-medium mb-2">Temps par m² (h/m²)</div>
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 text-sm">
+              <label class="flex items-center justify-between gap-3"><span>Ponçage</span><input id="cr_t_poncage" type="number" step="0.05" value="0.25" class="w-24 rounded-xl border border-neutral-300 px-2 py-1"></label>
+              <label class="flex items-center justify-between gap-3"><span>Aérogommage</span><input id="cr_t_aero" type="number" step="0.05" value="0.35" class="w-24 rounded-xl border border-neutral-300 px-2 py-1"></label>
+              <label class="flex items-center justify-between gap-3"><span>Peinture 1 coul.</span><input id="cr_t_p1" type="number" step="0.05" value="0.40" class="w-24 rounded-xl border border-neutral-300 px-2 py-1"></label>
+              <label class="flex items-center justify-between gap-3"><span>Peinture 2 coul.</span><input id="cr_t_p2" type="number" step="0.05" value="0.55" class="w-24 rounded-xl border border-neutral-300 px-2 py-1"></label>
+              <label class="flex items-center justify-between gap-3"><span>Teinte</span><input id="cr_t_teinte" type="number" step="0.05" value="0.25" class="w-24 rounded-xl border border-neutral-300 px-2 py-1"></label>
+              <label class="flex items-center justify-between gap-3"><span>Vernis</span><input id="cr_t_vernis" type="number" step="0.05" value="0.30" class="w-24 rounded-xl border border-neutral-300 px-2 py-1"></label>
+            </div>
+          </div>
+
+          <div class="rounded-2xl border border-neutral-200 bg-white p-4">
+            <div class="font-medium mb-2">Produits (€/m²) & pièces</div>
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 text-sm">
+              <label class="flex items-center justify-between gap-3"><span>Peinture 1 coul.</span><input id="cr_p_p1" type="number" step="0.5" value="6" class="w-24 rounded-xl border border-neutral-300 px-2 py-1"></label>
+              <label class="flex items-center justify-between gap-3"><span>Peinture 2 coul.</span><input id="cr_p_p2" type="number" step="0.5" value="10" class="w-24 rounded-xl border border-neutral-300 px-2 py-1"></label>
+              <label class="flex items-center justify-between gap-3"><span>Teinte</span><input id="cr_p_teinte" type="number" step="0.5" value="3" class="w-24 rounded-xl border border-neutral-300 px-2 py-1"></label>
+              <label class="flex items-center justify-between gap-3"><span>Vernis</span><input id="cr_p_vernis" type="number" step="0.5" value="5" class="w-24 rounded-xl border border-neutral-300 px-2 py-1"></label>
+              <label class="flex items-center justify-between gap-3"><span>Consommables</span><input id="cr_p_cons" type="number" step="0.5" value="2" class="w-24 rounded-xl border border-neutral-300 px-2 py-1"></label>
+            </div>
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 text-sm mt-3">
+              <label class="flex items-center justify-between gap-3"><span>Ferrures — temps/pc (h)</span><input id="cr_t_f" type="number" step="0.05" value="0.12" class="w-24 rounded-xl border border-neutral-300 px-2 py-1"></label>
+              <label class="flex items-center justify-between gap-3"><span>Ferrures — coût/pc (€)</span><input id="cr_p_f" type="number" step="0.5" value="3" class="w-24 rounded-xl border border-neutral-300 px-2 py-1"></label>
+            </div>
+          </div>
+        </div>
+      </section>
+    </div>
+
+    <aside class="lg:sticky lg:top-24 h-max">
+      <section class="rounded-2xl border border-neutral-200 bg-white p-5 shadow-sm">
+        <h2 class="text-xl font-semibold mb-3">Coût de revient — Résultats</h2>
+        <div class="space-y-1 text-sm">
+          <div class="flex items-center justify-between"><span>Surface prise en compte</span><span id="cr_out_surface">0,00 m²</span></div>
+          <div class="flex items-center justify-between"><span>Heures MO</span><span id="cr_out_heures">0,00 h</span></div>
+          <div class="flex items-center justify-between"><span>Coût MO</span><span id="cr_out_mo">0,00 €</span></div>
+          <div class="flex items-center justify-between"><span>Produits & consommables</span><span id="cr_out_mat">0,00 €</span></div>
+          <div class="flex items-center justify-between"><span>Ferrures (temps+€)</span><span id="cr_out_f">0,00 €</span></div>
+          <div class="flex items-center justify-between"><span>Transport (du devis)</span><span id="cr_out_tr">0,00 €</span></div>
+          <div class="h-px bg-neutral-200 my-1"></div>
+          <div class="flex items-center justify-between text-base font-semibold"><span>Total coût de revient</span><span id="cr_out_total">0,00 €</span></div>
+        </div>
+      </section>
+    </aside>
+  </div>
+</div>

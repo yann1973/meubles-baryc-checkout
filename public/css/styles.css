@@ -1,0 +1,6 @@
+html,body{scroll-behavior:smooth}
+.tab{border:1px solid #d1d5db;border-radius:12px;padding:8px 12px;font-size:14px}
+.tab:hover{background:#f3f4f6}
+.tab-active{background:#0f172a;color:#fff;border-color:#0f172a}
+/* Toujours au-dessus de ton UI */
+.pac-container {z-index: 10000 !important;}
