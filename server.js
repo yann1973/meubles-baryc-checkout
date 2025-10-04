@@ -15,7 +15,7 @@ const port = process.env.PORT || 4242;
 // ---------- Helpers ----------
 function getOrigin(req) {
   // SITE_URL (Render) ex: https://meubles-bary.onrender.com
-  // sinon reconstruit à partir de la requête
+  // sinon reconstruit à partir de la requête entrante
   return process.env.SITE_URL || `${req.protocol}://${req.get('host')}`;
 }
 
@@ -31,24 +31,44 @@ app.use(compression());
 app.use(express.json());
 
 // CORS (si front sur autre origine). Si front même origine, ça ne gêne pas.
-const FRONT_ORIGIN = process.env.FRONT_ORIGIN || getOrigin({ protocol: 'https', get: () => '' }) || '*';
-app.use(cors({
-  origin: FRONT_ORIGIN === '*' ? true : FRONT_ORIGIN,
-  methods: ['GET', 'POST', 'HEAD', 'OPTIONS'],
-  allowedHeaders: ['Content-Type']
-}));
+const FRONT_ORIGIN = process.env.FRONT_ORIGIN || '*';
+app.use(
+  cors({
+    origin: FRONT_ORIGIN === '*' ? true : FRONT_ORIGIN,
+    methods: ['GET', 'POST', 'HEAD', 'OPTIONS'],
+    allowedHeaders: ['Content-Type'],
+  })
+);
 
 // ---------- Expose les variables PUBLIQUES au front ----------
 app.get('/env.js', (_req, res) => {
-  res.type('application/javascript').send(
-    `window.ENV=${JSON.stringify({
-      STRIPE_PUBLISHABLE_KEY: process.env.PUBLIC_STRIPE_PUBLISHABLE_KEY || '',
-      GOOGLE_MAPS_API_KEY: process.env.PUBLIC_GOOGLE_MAPS_API_KEY || ''
-    })};`
-  );
+  res
+    .type('application/javascript')
+    .send(
+      `window.ENV=${JSON.stringify({
+        STRIPE_PUBLISHABLE_KEY: process.env.PUBLIC_STRIPE_PUBLISHABLE_KEY || '',
+        GOOGLE_MAPS_API_KEY: process.env.PUBLIC_GOOGLE_MAPS_API_KEY || '',
+      })};`
+    );
 });
 
-// ---------- Fichiers statiques (AVANT tout catch-all) ----------
+// ---------- Static: assets dédiés (AVANT tout) ----------
+// IMPORTANT: fallthrough:false => un asset manquant retourne 404 (et pas index.html)
+const ASSET_OPTS = {
+  etag: true,
+  lastModified: true,
+  fallthrough: false,
+  setHeaders: (res, filePath) => {
+    if (/\.(js|css|woff2?|ttf|png|jpe?g|svg|webp|ico)$/i.test(filePath)) {
+      res.setHeader('Cache-Control', 'public, max-age=604800, immutable'); // 7 jours
+    }
+  },
+};
+app.use('/js', express.static(path.join(__dirname, 'public', 'js'), ASSET_OPTS));
+app.use('/css', express.static(path.join(__dirname, 'public', 'css'), ASSET_OPTS));
+app.use('/img', express.static(path.join(__dirname, 'public', 'img'), ASSET_OPTS));
+
+// ---------- Static: répertoire public (sans bloquer le catch-all) ----------
 app.use(
   express.static(path.join(__dirname, 'public'), {
     etag: true,
@@ -63,7 +83,7 @@ app.use(
       if (/\.(js|css|woff2?|ttf|png|jpe?g|svg|webp|ico)$/i.test(filePath)) {
         res.setHeader('Cache-Control', 'public, max-age=604800, immutable'); // 7 jours
       }
-    }
+    },
   })
 );
 
@@ -97,10 +117,10 @@ app.post('/create-checkout-session', async (req, res) => {
           unit_amount: amount,
           product_data: {
             name: String(it.name || 'Article'),
-            description: String(it.description || '')
-          }
+            description: String(it.description || ''),
+          },
         },
-        quantity
+        quantity,
       };
     });
 
@@ -113,7 +133,7 @@ app.post('/create-checkout-session', async (req, res) => {
       cancel_url: `${origin}/cancel.html`,
       allow_promotion_codes: true,
       billing_address_collection: 'required',
-      metadata
+      metadata,
     });
 
     res.json({ checkoutUrl: session.url });
