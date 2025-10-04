@@ -15,32 +15,26 @@ export function initTabs(){
 
   const open = async (tab) => {
     try {
-      // 1) injecte le HTML (vide le conteneur avant)
       if (view) view.innerHTML = '';
       await loadView(tab);
       setActive(tab);
 
-      // 2) maintient l'URL (#devis/#cr/#ch)
       const targetHash = '#' + tab;
       if (location.hash !== targetHash) {
         history.replaceState(null, '', targetHash);
       }
 
-      // 3) init JS de l’onglet (avec cache-busting)
-      const v = 'v=' + Date.now();
       if (tab === 'devis') {
-        const mod = await import(`/js/devis/ui.js?${v}`);
+        const mod = await import('/js/devis/ui.js');     // ⬅⬅ sans ?v=
         (mod.initDevis || mod.default)();
       } else if (tab === 'cr') {
-        const mod = await import(`/js/cout_de_revient/cr.js?${v}`);
-        // On câble tout d'un coup (bindings + compute pricing + affichage CR)
-        (mod.wireCR || mod.default || (()=>{}))();
+        const mod = await import('/js/cout_de_revient/cr.js'); // ⬅⬅
+        (mod.initCR || mod.default || (()=>{}))();
       } else if (tab === 'ch') {
-        const mod = await import(`/js/cout_horaire/ch.js?${v}`);
+        const mod = await import('/js/cout_horaire/ch.js');    // ⬅⬅
         (mod.initCH || mod.default || (()=>{}))();
       }
 
-      // 4) confort
       window.scrollTo({ top: 0, behavior: 'smooth' });
     } catch (e) {
       console.error(e);
@@ -54,18 +48,10 @@ export function initTabs(){
     }
   };
 
-  // clics onglets
   tabDevis?.addEventListener('click', () => open('devis'));
   tabCR?.addEventListener('click',    () => open('cr'));
   tabCH?.addEventListener('click',    () => open('ch'));
 
-  // navigation via hash (retour/avancer navigateur)
-  window.addEventListener('hashchange', () => {
-    const t = (location.hash || '#devis').slice(1);
-    open(t);
-  });
-
-  // onglet initial
   const initial = (location.hash || '#devis').slice(1);
   open(initial);
 }
