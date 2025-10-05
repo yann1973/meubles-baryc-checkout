@@ -87,55 +87,64 @@ export function initTabs() {
     return null;
   };
 
-  const open = async (tab) => {
-    if (!VALID_TABS.has(tab)) tab = 'devis';
-    if (loading || currentTab === tab) return;
+  const open = async (tab, { allowScroll = false } = {}) => {
+  if (!VALID_TABS.has(tab)) tab = 'devis';
+  if (loading || currentTab === tab) return;
 
-    loading = true;
-    const myReq = ++reqId;
-    console.debug('[tabs] open:', tab);
+  loading = true;
+  const myReq = ++reqId;
+  console.debug('[tabs] open:', tab);
 
-    try {
-      if (view) view.innerHTML = '';
-      if (typeof loadView !== 'function') throw new Error('loader.js: loadView introuvable');
-      await loadView(tab);
-      if (myReq !== reqId) return; // anti-course
+  try {
+    if (view) view.innerHTML = '';
+    if (typeof loadView !== 'function') throw new Error('loader.js: loadView introuvable');
+    await loadView(tab);
 
-      setActive(tab);
+    if (myReq !== reqId) return; // anti-course
 
-      const targetHash = '#' + tab;
-      if (location.hash !== targetHash) history.replaceState(null, '', targetHash);
+    setActive(tab);
 
-      const { moduleFromHere, inits } = TABS[tab];
-      const mod = await importModule(moduleFromHere);
-      const init = pickInit(mod, inits) || (() => {});
-      init();
+    const targetHash = '#' + tab;
+    if (location.hash !== targetHash) history.replaceState(null, '', targetHash);
 
-      scrollForTab(tab);
-      currentTab = tab;
-    } catch (e) {
-      console.error('[tabs] open error:', e);
-      if (view) {
-        view.innerHTML = `
-          <div class="max-w-3xl mx-auto p-4 mt-6 rounded-xl border border-rose-200 bg-rose-50 text-rose-900">
-            <div class="font-semibold mb-1">Erreur de chargement de l’onglet “${tab}”</div>
-            <pre class="text-xs overflow-auto">${(e && e.message) || e}</pre>
-          </div>`;
-      }
-    } finally {
-      loading = false;
+    const { moduleFromHere, inits } = TABS[tab];
+    // si tu utilises importModule(...) garde-le ; sinon remets import(...)
+    const mod = await importModule(moduleFromHere);
+    const init = pickInit(mod, inits) || (() => {});
+    init();
+
+    // ⬇️ pas de scroll automatique, sauf si autorisé (ex: navigation par hash externe)
+    if (allowScroll && tab === 'devis') {
+      const anchor = document.querySelector('#devis');
+      anchor?.scrollIntoView({ behavior: 'smooth', block: 'start', inline: 'nearest' });
     }
-  };
 
-  tabDevis?.addEventListener('click', () => open('devis'));
-  tabCR?.addEventListener('click',    () => open('cr'));
-  tabCH?.addEventListener('click',    () => open('ch'));
+    currentTab = tab;
+  } catch (e) {
+    console.error('[tabs] open error:', e);
+    if (view) {
+      view.innerHTML = `
+        <div class="max-w-3xl mx-auto p-4 mt-6 rounded-xl border border-rose-200 bg-rose-50 text-rose-900">
+          <div class="font-semibold mb-1">Erreur de chargement de l’onglet “${tab}”</div>
+          <pre class="text-xs overflow-auto">${(e && e.message) || e}</pre>
+        </div>`;
+    }
+  } finally {
+    loading = false;
+  }
+};
 
-  window.addEventListener('hashchange', () => {
-    const next = (location.hash || '#devis').slice(1);
-    open(VALID_TABS.has(next) ? next : 'devis');
-  }, { passive: true });
+// ⬇️ handlers: clic = pas de scroll ; hashchange = scroll autorisé
+tabDevis?.addEventListener('click', () => open('devis', { allowScroll: false }));
+tabCR?.addEventListener('click',    () => open('cr',    { allowScroll: false }));
+tabCH?.addEventListener('click',    () => open('ch',    { allowScroll: false }));
 
-  const initial = (location.hash || '#devis').slice(1);
-  open(VALID_TABS.has(initial) ? initial : 'devis');
+window.addEventListener('hashchange', () => {
+  const next = (location.hash || '#devis').slice(1);
+  open(VALID_TABS.has(next) ? next : 'devis', { allowScroll: true });
+}, { passive: true });
+
+// Ouverture initiale: pas de scroll forcé
+const initial = (location.hash || '#devis').slice(1);
+open(VALID_TABS.has(initial) ? initial : 'devis', { allowScroll: false });
 }
