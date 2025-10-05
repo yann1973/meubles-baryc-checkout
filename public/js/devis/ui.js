@@ -118,7 +118,7 @@ function bindTypeButtons(){
 
 
 
-/* ===================== Recompute global ===================== 
+/* ===================== Recompute global ===================== */
 function recompute(){
   // computePricing doit retourner un objet { totalSurface, goods:{ht,tva,ttc}, transport:{...}, totals:{...} }
   const pricing = computePricing();
@@ -132,7 +132,7 @@ function recompute(){
 }
 
 
-*/
+
 
 
 
