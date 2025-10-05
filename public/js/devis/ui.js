@@ -94,7 +94,7 @@ function bindDimensions() {
 
 
 
-/* ===================== Type de meuble (si boutons présents) ===================== 
+/* ===================== Type de meuble (si boutons présents) ===================== */
 function bindTypeButtons(){
   const host = document.getElementById('typeButtons');
   if (!host) return; // pas bloquant si l’UI ne l’a pas
@@ -114,7 +114,7 @@ function bindTypeButtons(){
 }
 
 
-*/
+
 
 
 
