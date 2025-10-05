@@ -11,7 +11,7 @@ function euro(n){
   return new Intl.NumberFormat('fr-FR',{style:'currency',currency:'EUR'}).format(Number(n)||0);
 }
 
-/* ===================== Services au m² ===================== 
+/* ===================== Services au m² ===================== */
 function buildServicesM2() {
   const host = document.getElementById('servicesM2');
   if (!host) return;
@@ -54,12 +54,12 @@ function buildServicesM2() {
 }
 
 
-*/
 
 
 
 
-/* ===================== Pièces (ferrures) ===================== 
+
+/* ===================== Pièces (ferrures) ===================== */
 function bindPieceInputs() {
   [['f_change','ferrures_change'],['f_polish','ferrures_polissage']].forEach(([id,key])=>{
     const el = document.getElementById(id);
@@ -74,7 +74,7 @@ function bindPieceInputs() {
 
 
 
-*/
+
 
 /* ===================== Dimensions ===================== 
 function bindDimensions() {
