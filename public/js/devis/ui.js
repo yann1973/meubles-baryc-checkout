@@ -76,7 +76,7 @@ function bindPieceInputs() {
 
 
 
-/* ===================== Dimensions ===================== 
+/* ===================== Dimensions ===================== */
 function bindDimensions() {
   [['longueur','L'],['largeur','W'],['hauteur','H']].forEach(([id,k])=>{
     const el = document.getElementById(id);
@@ -91,7 +91,7 @@ function bindDimensions() {
 
 
 
-*/
+
 
 
 /* ===================== Type de meuble (si boutons présents) ===================== 
