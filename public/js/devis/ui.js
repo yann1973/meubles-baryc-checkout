@@ -239,7 +239,7 @@ function bindClearRecapButton(){
 
 // --- à coller quelque part en haut du fichier (sous tes autres petites fonctions) ---
 
-/*
+
 function bindPhoneDigitsOnly() {
   const tel = document.getElementById('telephone');
   const err = document.getElementById('telError');
@@ -274,10 +274,10 @@ function bindPhoneDigitsOnly() {
 }
 
 
-*/
 
 
-/* ===================== Entrée principale =====================
+
+/* ===================== Entrée principale ===================== */
 export function initDevis(){
   buildServicesM2();
   bindTypeButtons();  // non bloquant si l'UI n'a pas la zone des types
@@ -296,7 +296,7 @@ export function initDevis(){
   recompute();
 }
 
- */
+ 
 
 
 
