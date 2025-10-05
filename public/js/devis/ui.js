@@ -11,7 +11,7 @@ function euro(n){
   return new Intl.NumberFormat('fr-FR',{style:'currency',currency:'EUR'}).format(Number(n)||0);
 }
 
-/* ===================== Services au m² ===================== */
+/* ===================== Services au m² ===================== 
 function buildServicesM2() {
   const host = document.getElementById('servicesM2');
   if (!host) return;
@@ -53,7 +53,13 @@ function buildServicesM2() {
   });
 }
 
-/* ===================== Pièces (ferrures) ===================== */
+
+*/
+
+
+
+
+/* ===================== Pièces (ferrures) ===================== 
 function bindPieceInputs() {
   [['f_change','ferrures_change'],['f_polish','ferrures_polissage']].forEach(([id,key])=>{
     const el = document.getElementById(id);
@@ -66,7 +72,11 @@ function bindPieceInputs() {
   });
 }
 
-/* ===================== Dimensions ===================== */
+
+
+*/
+
+/* ===================== Dimensions ===================== 
 function bindDimensions() {
   [['longueur','L'],['largeur','W'],['hauteur','H']].forEach(([id,k])=>{
     const el = document.getElementById(id);
@@ -79,7 +89,12 @@ function bindDimensions() {
   });
 }
 
-/* ===================== Type de meuble (si boutons présents) ===================== */
+
+
+*/
+
+
+/* ===================== Type de meuble (si boutons présents) ===================== 
 function bindTypeButtons(){
   const host = document.getElementById('typeButtons');
   if (!host) return; // pas bloquant si l’UI ne l’a pas
@@ -98,7 +113,12 @@ function bindTypeButtons(){
   }
 }
 
-/* ===================== Recompute global ===================== */
+
+*/
+
+
+
+/* ===================== Recompute global ===================== 
 function recompute(){
   // computePricing doit retourner un objet { totalSurface, goods:{ht,tva,ttc}, transport:{...}, totals:{...} }
   const pricing = computePricing();
@@ -111,7 +131,15 @@ function recompute(){
   if (surf) surf.textContent = `${(pricing.totalSurface||0).toFixed(2)} m²`;
 }
 
+
+*/
+
+
+
+
 /* ======= RESET COMPLET DU DEVIS (bouton "Vider le récap") ======= */
+/*
+
 function resetDevisForm(){
   // 1) State par défaut
   state.type = 'Table';
@@ -151,6 +179,11 @@ function resetDevisForm(){
   const sel = document.getElementById('connaissance');
   if (sel) sel.value = '';
 
+
+
+
+
+  
   // 6) Inputs — transport
   const modeSel = document.getElementById('transportMode');
   if (modeSel){
@@ -189,8 +222,12 @@ function resetDevisForm(){
   clearRecap();    // vide l’affichage du récap
   recompute();     // recalcule proprement les totaux (tout à 0)
 }
+*/
 
-/* ======= Bouton "Vider le récapitulatif" ======= */
+
+
+
+/* ======= Bouton "Vider le récapitulatif" ======= 
 function bindClearRecapButton(){
   const btn = document.getElementById('btnClearRecap');
   if (btn && !btn.__bound){
@@ -198,9 +235,11 @@ function bindClearRecapButton(){
     btn.addEventListener('click', resetDevisForm);
   }
 }
-
+*/
 
 // --- à coller quelque part en haut du fichier (sous tes autres petites fonctions) ---
+
+/*
 function bindPhoneDigitsOnly() {
   const tel = document.getElementById('telephone');
   const err = document.getElementById('telError');
@@ -235,8 +274,10 @@ function bindPhoneDigitsOnly() {
 }
 
 
+*/
 
-/* ===================== Entrée principale ===================== */
+
+/* ===================== Entrée principale =====================
 export function initDevis(){
   buildServicesM2();
   bindTypeButtons();  // non bloquant si l'UI n'a pas la zone des types
@@ -253,4 +294,28 @@ export function initDevis(){
   
   // Premier calcul
   recompute();
+}
+
+ */
+
+
+
+
+
+
+
+
+
+
+// public/js/devis/ui.js
+export function initDevis() {
+  console.log('[ui.js] initDevis OK');
+  const host = document.querySelector('#view');
+  if (!host) return;
+
+  const box = document.createElement('div');
+  box.className = 'max-w-3xl mx-auto p-4 mt-6 rounded-xl border border-emerald-200 bg-emerald-50 text-emerald-900';
+  box.innerHTML = `<div class="font-semibold mb-1">Devis chargé ✅</div>
+                   <p class="text-sm">Module <code>/js/devis/ui.js</code> importé et exécuté.</p>`;
+  host.appendChild(box);
 }

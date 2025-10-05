@@ -1,39 +1,24 @@
-# Node / runtime
+# --- Node ---
 node_modules/
 npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-pnpm-debug.log*
-package-lock.json
-pnpm-lock.yaml
+# On versionne le lockfile npm pour les builds reproductibles
+!package-lock.json
+
+# --- Lockfiles alternatifs (non utilisés ici) ---
 yarn.lock
+pnpm-lock.yaml
 
-# Env (ne jamais committer tes secrets)
-.env
-.env.local
-.env.*.local
-
-# OS / éditeurs
-.DS_Store
-Thumbs.db
-.idea/
-.vscode/
-*.swp
-
-# Builds / caches
+# --- Build / Cache ---
 dist/
 build/
-coverage/
+.tmp/
 .cache/
-.parcel-cache/
-.vite/
-.next/
-out/
-.vercel/
-.netlify/
 
-# Front config privé (clé Google Maps côté client)
-public/js/config.js
+# --- Env & secrets ---
+.env
+.env.local
 
-# Divers
-*.zip
+# --- OS / Editors ---
+.DS_Store
+.idea/
+.vscode/

@@ -1,46 +1,40 @@
 // public/js/tabs.js
 import { loadView } from '/js/loader.js';
 
-// Helper d'import tolérant aux ?v=..., au cache et aux chemins
-async function importModule(spec) {
-  const buildURL = (p) => (p.startsWith('http') ? p : new URL(p, location.origin).href);
+// helper d'import tolérant + chemins relatifs à ce fichier
+async function importModule(specFromHere) {
+  const abs = new URL(specFromHere, import.meta.url).href;
+  const clean = abs.split('?')[0];
+  const withBust = `${clean}?ts=${Date.now()}`;
 
-  // liste d'essais (as-is, sans query, cache-bust, relatif)
-  const absolute = buildURL(spec);
-  const cleanAbs = absolute.split('?')[0];
-  const relative = buildURL(spec.replace(/^\//, ''));
-
-  const candidates = [
-    { url: absolute,            label: 'as-is' },
-    { url: cleanAbs,            label: 'no-query' },
-    { url: `${cleanAbs}?ts=${Date.now()}`, label: 'cache-bust' },
-    { url: relative,            label: 'relative' },
-  ];
-
-  const isProbablyJS = (ct) => {
-    if (!ct) return true;                   // certains serveurs n’envoient pas le CT sur HEAD
+  const isJS = (ct) => {
+    if (!ct) return true;
     const l = ct.toLowerCase();
-    if (l.includes('javascript')) return true;
-    if (l.includes('text/plain')) return true; // tolère certains setups
-    if (l.includes('html')) return false;      // on refuse clairement HTML
+    if (l.includes('javascript') || l.includes('text/plain')) return true;
+    if (l.includes('html')) return false;
     return true;
   };
 
-  for (const c of candidates) {
+  async function tryOne(url, label) {
     try {
-      const res = await fetch(c.url, { method: 'HEAD', cache: 'no-store' });
-      if (res.ok && isProbablyJS(res.headers.get('content-type'))) {
-        console.debug('[tabs] import', c.label, c.url, res.status, res.headers.get('content-type'));
-        return await import(/* @vite-ignore */ c.url);
+      const h = await fetch(url, { method: 'HEAD', cache: 'no-store' });
+      if (h.ok && isJS(h.headers.get('content-type'))) {
+        console.debug('[tabs] import', label, url, h.status, h.headers.get('content-type'));
+        return await import(/* @vite-ignore */ url);
       }
-      console.warn('[tabs] HEAD non OK / CT inattendu:', c.label, c.url, res.status, res.headers.get('content-type'));
+      console.warn('[tabs] HEAD non OK/CT:', label, url, h.status, h.headers.get('content-type'));
     } catch (e) {
-      console.warn('[tabs] HEAD échec pour', c.label, c.url, e);
+      console.warn('[tabs] HEAD échec', label, url, e);
     }
+    return null;
   }
 
-  // dernier essai: laisse remonter l'erreur pour avoir la stack exacte
-  return await import(/* @vite-ignore */ buildURL(spec));
+  return (
+    (await tryOne(abs, 'as-is')) ||
+    (await tryOne(clean, 'no-query')) ||
+    (await tryOne(withBust, 'cache-bust')) ||
+    (await import(/* @vite-ignore */ abs)) // dernier essai
+  );
 }
 
 export function initTabs() {
@@ -51,10 +45,11 @@ export function initTabs() {
 
   if (!view) console.warn('[tabs] #view introuvable');
 
+  // ⚠️ chemins RELATIFS à tabs.js
   const TABS = {
-    devis: { module: '/js/devis/ui.js',            inits: ['initDevis', 'default'] },
-    cr:    { module: '/js/cout_de_revient/cr.js',  inits: ['initCR', 'default'] },
-    ch:    { module: '/js/cout_horaire/ch.js',     inits: ['initCH', 'default'] },
+    devis: { moduleFromHere: './devis/ui.js',            inits: ['initDevis', 'default'] },
+    cr:    { moduleFromHere: './cout_de_revient/cr.js',  inits: ['initCR', 'default'] },
+    ch:    { moduleFromHere: './cout_horaire/ch.js',     inits: ['initCH', 'default'] },
   };
   const VALID_TABS = new Set(Object.keys(TABS));
 
@@ -66,13 +61,13 @@ export function initTabs() {
     { el: tabDevis, key: 'devis' },
     { el: tabCR,    key: 'cr' },
     { el: tabCH,    key: 'ch' },
-  ].filter(t => !!t.el);
+  ].filter(Boolean);
 
   const setActive = (tab) => {
     allTabs.forEach(({ el, key }) => {
-      const isActive = key === tab;
-      el.classList.toggle('tab-active', isActive);
-      el.setAttribute('aria-selected', String(isActive));
+      const active = key === tab;
+      el.classList.toggle('tab-active', active);
+      el.setAttribute('aria-selected', String(active));
     });
   };
 
@@ -104,18 +99,15 @@ export function initTabs() {
       if (view) view.innerHTML = '';
       if (typeof loadView !== 'function') throw new Error('loader.js: loadView introuvable');
       await loadView(tab);
-
-      if (myReq !== reqId) return; // anti-course si clics rapides
+      if (myReq !== reqId) return; // anti-course
 
       setActive(tab);
 
       const targetHash = '#' + tab;
-      if (location.hash !== targetHash) {
-        history.replaceState(null, '', targetHash);
-      }
+      if (location.hash !== targetHash) history.replaceState(null, '', targetHash);
 
-      const { module, inits } = TABS[tab];
-      const mod = await importModule(module);
+      const { moduleFromHere, inits } = TABS[tab];
+      const mod = await importModule(moduleFromHere);
       const init = pickInit(mod, inits) || (() => {});
       init();
 
