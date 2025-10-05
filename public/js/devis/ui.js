@@ -295,3 +295,45 @@ export function initDevis(){
   // Premier calcul
   recompute();
 }
+
+
+
+// public/js/devis/ui.js
+
+export function resetDevis() {
+  const host = document.querySelector('#view');
+  if (!host) return;
+
+  // 1) inputs/selects/textarea -> valeurs par défaut
+  host.querySelectorAll('input, select, textarea').forEach((el) => {
+    const tag = el.tagName.toLowerCase();
+    const type = (el.getAttribute('type') || '').toLowerCase();
+
+    if (type === 'checkbox' || type === 'radio') {
+      el.checked = false;
+    } else if (tag === 'select') {
+      el.selectedIndex = 0;
+    } else {
+      el.value = '';
+    }
+
+    // enlève l'état d'erreur/succès éventuel
+    el.classList.remove('is-invalid', 'is-valid');
+    el.removeAttribute('aria-invalid');
+  });
+
+  // 2) zones de sortie (totaux, récap) -> vides/0
+  host.querySelectorAll('[data-output], [data-total], .js-output, .js-total').forEach((el) => {
+    el.textContent = '';
+  });
+
+  // 3) panier côté storage -> purge
+  // adapte la/les clé(s) à ton app si besoin
+  const PANIER_KEYS = ['devis_cart', 'panier', 'cart', 'DEVIS_CART'];
+  PANIER_KEYS.forEach((k) => localStorage.removeItem(k));
+
+  // 4) avertir les autres modules (si certains recalculent à l’écoute de cet event)
+  window.dispatchEvent(new CustomEvent('devis:reset'));
+
+  console.log('[devis] reset complet effectué');
+}
