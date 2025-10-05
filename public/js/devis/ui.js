@@ -303,7 +303,7 @@ export function initDevis(){
 
 
 
-
+/*
 
 
 
@@ -319,3 +319,6 @@ export function initDevis() {
                    <p class="text-sm">Module <code>/js/devis/ui.js</code> importé et exécuté.</p>`;
   host.appendChild(box);
 }
+
+
+*/
