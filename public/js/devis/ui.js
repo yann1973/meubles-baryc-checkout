@@ -227,7 +227,7 @@ function resetDevisForm(){
 
 
 
-/* ======= Bouton "Vider le récapitulatif" ======= 
+/* ======= Bouton "Vider le récapitulatif" ======= */
 function bindClearRecapButton(){
   const btn = document.getElementById('btnClearRecap');
   if (btn && !btn.__bound){
@@ -235,7 +235,7 @@ function bindClearRecapButton(){
     btn.addEventListener('click', resetDevisForm);
   }
 }
-*/
+
 
 // --- à coller quelque part en haut du fichier (sous tes autres petites fonctions) ---
 
