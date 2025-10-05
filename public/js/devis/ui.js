@@ -138,7 +138,7 @@ function recompute(){
 
 
 /* ======= RESET COMPLET DU DEVIS (bouton "Vider le récap") ======= */
-/*
+
 
 function resetDevisForm(){
   // 1) State par défaut
@@ -222,7 +222,7 @@ function resetDevisForm(){
   clearRecap();    // vide l’affichage du récap
   recompute();     // recalcule proprement les totaux (tout à 0)
 }
-*/
+
 
 
 
