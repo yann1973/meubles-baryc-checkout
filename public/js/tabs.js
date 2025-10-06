@@ -1,3 +1,7 @@
+console.log("[DEPLOY TEST] " + new Date().toISOString());
+
+
+
 // public/js/tabs.js
 import { loadView } from '/js/loader.js';
 
