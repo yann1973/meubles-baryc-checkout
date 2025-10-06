@@ -16,9 +16,9 @@ const LABELS = {
   consommables: 'Consommables',
 };
 
-// ---- stockage des coûts saisis par l’utilisateur (€/m²) ----
+// ---- stockage des coûts saisis (€/m²) ----
 const LS_KEY = 'cr_user_costs_v1';
-let userCosts = loadUserCosts(); // { key: number }
+let userCosts = loadUserCosts();
 
 function loadUserCosts() {
   try {
@@ -35,11 +35,9 @@ function loadUserCosts() {
     return {};
   }
 }
-
 function saveUserCosts() {
   try { localStorage.setItem(LS_KEY, JSON.stringify(userCosts)); } catch {}
 }
-
 function setUserCost(key, value) {
   if (!ORDER.includes(key)) return;
   if (value === '' || value == null || !Number.isFinite(Number(value))) {
@@ -52,17 +50,17 @@ function setUserCost(key, value) {
   renderCR(); // live update
 }
 
-// ---- logique coût de revient €/m² pour une prestation ----
+// ---- coût de revient €/m² pour une prestation ----
 function getServiceCostM2(key) {
-  // 1) coût saisi par l'utilisateur -> prioritaire
+  // priorité aux coûts saisis
   if (Number.isFinite(userCosts[key])) return userCosts[key];
 
-  // 2) coût direct dans PRICING
+  // coût direct dans PRICING
   const direct = PRICING?.costs?.servicesM2?.[key];
   if (Number.isFinite(direct)) return Math.max(0, Number(direct));
 
-  // 3) estimation via marge depuis PV/m² (TTC) si dispo
-  const pvService = PRICING?.servicesTTC?.[key]; // €/m² vendu
+  // estimation via marge depuis PV/m² (TTC)
+  const pvService = PRICING?.servicesTTC?.[key];
   if (!Number.isFinite(pvService)) return null;
 
   const mHT  = PRICING?.margin?.htRate;
@@ -70,11 +68,47 @@ function getServiceCostM2(key) {
   if (Number.isFinite(mHT))  return pvService * (1 - Math.max(0, Math.min(1, mHT)));
   if (Number.isFinite(mTTC)) return pvService * (1 - Math.max(0, Math.min(1, mTTC)));
 
-  return null; // inconnu
+  return null;
 }
 
-// ---- rendu du tableau de config ----
+// ---- construit le tableau de saisie (et le bloc si absent) ----
+function ensureConfigCard() {
+  let card = document.getElementById('cr-config-card');
+  if (!card) {
+    const host = document.querySelector('section .md\\:col-span-2') || document.querySelector('section');
+    card = document.createElement('div');
+    card.id = 'cr-config-card';
+    card.className = 'rounded-xl border border-neutral-200 bg-white p-4 mt-6';
+    card.innerHTML = `
+      <div class="flex items-center justify-between gap-3 mb-3">
+        <h3 class="text-base font-semibold">Mes coûts de revient (€/m²)</h3>
+        <button id="btn-cr-reset-costs" type="button"
+          class="h-9 px-3 rounded-lg border border-neutral-300 hover:bg-neutral-50 text-sm">
+          Réinitialiser mes coûts
+        </button>
+      </div>
+      <div class="overflow-x-auto">
+        <table class="w-full text-sm">
+          <thead class="text-left text-neutral-500">
+            <tr>
+              <th class="py-2 pr-3">Prestation</th>
+              <th class="py-2 pr-3">Mon CR €/m²</th>
+              <th class="py-2">PV €/m² (TTC)</th>
+            </tr>
+          </thead>
+          <tbody id="cr-config-table"></tbody>
+        </table>
+      </div>
+      <p class="text-xs text-neutral-500 mt-2">
+        Saisie auto, enregistrée localement (navigateur). Laisse vide pour utiliser le coût par défaut / marge.
+      </p>`;
+    host?.appendChild(card);
+  }
+  return card;
+}
+
 function renderCostsTable() {
+  ensureConfigCard();
   const tbody = document.getElementById('cr-config-table');
   if (!tbody) return;
 
@@ -214,7 +248,7 @@ function renderCR() {
 // ---- init + synchronisation temps réel ----
 let bound = false;
 export function initCR() {
-  renderCostsTable(); // construit le tableau de saisie
+  renderCostsTable(); // construit/injecte le tableau si absent
   renderCR();
 
   if (!bound) {
