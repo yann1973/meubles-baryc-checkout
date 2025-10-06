@@ -51,3 +51,5 @@ export function computePricing(opts = {}) {
   };
 }
 
+// Alias rétrocompat — pour le code qui appelle encore computeCR()
+export const computeCR = (...args) => computePricing(...args);
