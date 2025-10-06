@@ -14,7 +14,9 @@
     <p class="text-sm text-neutral-600 mt-1">Votre commande a bien été enregistrée.</p>
 
     <!-- IMPORTANT : le paramètre ?reset=1 déclenche le reset côté Devis -->
-    <a href="/?reset=1#devis" class="mt-4 inline-flex items-center justify-center h-10 px-4 rounded-lg bg-neutral-900 text-white"> Retour au calculateur</a>
+    <a href="/?reset=1#devis" 
+    onclick="try{ localStorage.setItem('force_reset','1'); }catch(e){}"
+    class="mt-4 inline-flex items-center justify-center h-10 px-4 rounded-lg bg-neutral-900 text-white"> Retour au calculateur</a>
   </main>
 </body>
 </html>

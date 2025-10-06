@@ -105,18 +105,29 @@ export function initTabs() {
       const init = pickInit(mod, inits) || (() => {});
       init();
 
-      // --- reset demandé depuis l'URL ?reset=1 (seulement pour l'onglet Devis)
+      // --- reset demandé depuis l'URL ?reset=1 ou via flag localStorage
 if (tab === 'devis') {
   const params = new URLSearchParams(location.search);
-  if (params.get('reset') === '1' && typeof mod.resetDevis === 'function') {
-    console.debug('[tabs] resetDevis() called from URL param');
-    try { mod.resetDevis(); } catch (e) { console.warn('[devis] reset error:', e); }
-    // nettoie l'URL pour ne pas relancer le reset ensuite
+  const flag = localStorage.getItem('force_reset') === '1';
+  const asked = params.get('reset') === '1' || flag;
+
+  if (asked) {
+    console.debug('[tabs] resetDevis() requested');
+    try {
+      if (typeof mod.resetDevis === 'function') mod.resetDevis();
+      else console.warn('[tabs] mod.resetDevis absente');
+    } catch (e) {
+      console.warn('[tabs] resetDevis error:', e);
+    }
+
+    // nettoie URL + flag pour éviter de re-reset
     params.delete('reset');
     const newUrl = location.pathname + (params.toString() ? '?' + params : '') + location.hash;
     history.replaceState(null, '', newUrl);
+    try { localStorage.removeItem('force_reset'); } catch {}
   }
 }
+
 
 window.dispatchEvent(new CustomEvent('devis:changed', { detail: { reason: 'reset' } }));
 
