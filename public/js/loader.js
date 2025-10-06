@@ -1,4 +1,10 @@
 // public/js/loader.js
+
+import { computePricing as _computePricing } from '/js/devis/pricing.js';
+// Expose un alias local nommé computeCR pour le reste du fichier
+const computeCR = _computePricing;
+
+
 const HTML_CACHE = new Map();
 
 async function getPartial(name){
