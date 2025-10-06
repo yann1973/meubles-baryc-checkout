@@ -122,6 +122,8 @@ function recompute(){
 
   const surf = document.getElementById('surfaceDisplay');
   if (surf) surf.textContent = `${(pricing.totalSurface||0).toFixed(2)} m²`;
+  // Notifie les autres onglets (CR) qu’il y a eu un recalcul
+  try { window.dispatchEvent(new CustomEvent('devis:changed', { detail: { pricing } })); } catch {}
 }
 
 /* ===================== Tel — chiffres uniquement ===================== */

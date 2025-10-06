@@ -1,122 +1,92 @@
 // public/js/cout_de_revient/cr.js
 import { state } from '../state.js';
-import { computePricing } from '../devis/pricing.js'; // <- OK : export existe
-import { toN, fmtEUR } from '../utils.js';
+import { PRICING } from '../devis/constants.js';
+import { computePricing } from '../devis/pricing.js';
+
+const euro = (n) =>
+  new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR' })
+    .format(Number(n) || 0);
 
 /**
- * Initialise les bindings des champs CR.
- * onUpdate : callback appelé à chaque saisie/changement pour recalculer l'affichage CR.
+ * Déduit le coût de revient / m² à partir de:
+ *  - PRICING.costs.m2  (si défini ⇒ direct)
+ *  - sinon, si PRICING.margin.ttcRate est défini (ex: 0.3), on approxime:
+ *      cr_m2 = pv_m2_ttc * (1 - marginRate)
+ *  - sinon: null (affiche un hint pour config)
  */
-export function initCR(onUpdate){
-  const ids = [
-    'cr_cout_h','cr_handling_h','cr_include_transport',
-    'cr_t_poncage','cr_t_aero','cr_t_p1','cr_t_p2','cr_t_teinte','cr_t_vernis',
-    'cr_p_p1','cr_p_p2','cr_p_teinte','cr_p_vernis','cr_p_cons','cr_t_f','cr_p_f'
-  ];
+function deriveCoutRevientM2({ pvM2TTC }) {
+  // 1) le plus propre: tu définis PRICING.costs.m2 dans constants.js
+  const direct = PRICING?.costs?.m2;
+  if (Number.isFinite(direct) && direct >= 0) return direct;
 
-  const safeUpdate = () => { if (typeof onUpdate === 'function') onUpdate(); };
+  // 2) approximation à partir de la marge TTC si fournie
+  const marginRate = PRICING?.margin?.ttcRate;
+  if (Number.isFinite(marginRate)) {
+    const r = Math.max(0, Math.min(1, Number(marginRate)));
+    return (Number(pvM2TTC) || 0) * (1 - r);
+  }
 
-  ids.forEach(id=>{
-    const el = document.getElementById(id);
-    if(!el) return;
-    el.addEventListener('input',  safeUpdate);
-    el.addEventListener('change', safeUpdate);
-  });
-
-  // Premier calcul immédiat
-  safeUpdate();
+  // 3) pas de donnée exploitable
+  return null;
 }
 
-/**
- * Calcule et affiche le coût de revient à partir du pricing courant
- * pricing : résultat de computePricing()
- * stateRef : conservé pour compat, non utilisé ici
- */
-export function computeCR(pricing /* from computePricing() */, stateRef){
-  // Si l'onglet n'est pas présent, on ne fait rien
-  if (!document.getElementById('cr_out_total')) return;
+function renderCR() {
+  const elSurface       = document.getElementById('cr-surface');
+  const elPvM2TTC       = document.getElementById('cr-pv-m2-ttc');
+  const elPvM2HT        = document.getElementById('cr-pv-m2-ht');
+  const elCRm2          = document.getElementById('cr-cr-m2');
+  const elCRmeuble      = document.getElementById('cr-cr-meuble');
+  const elPvTotalTTC    = document.getElementById('cr-pv-total-ttc');
+  const elPvTotalHT     = document.getElementById('cr-pv-total-ht');
+  const elHint          = document.getElementById('cr-hint');
 
-  // Surface issue du pricing (sécurisé)
-  const surf = Math.max(0, Number(pricing?.totalSurface) || 0);
+  const pricing = computePricing();
+  if (!pricing) return;
 
-  // Temps par m²
-  const tPon = toN(document.getElementById('cr_t_poncage')?.value);
-  const tAer = toN(document.getElementById('cr_t_aero')?.value);
-  const tP1  = toN(document.getElementById('cr_t_p1')?.value);
-  const tP2  = toN(document.getElementById('cr_t_p2')?.value);
-  const tTe  = toN(document.getElementById('cr_t_teinte')?.value);
-  const tVe  = toN(document.getElementById('cr_t_vernis')?.value);
-  const hdl  = toN(document.getElementById('cr_handling_h')?.value); // manutention (heures par déplacement)
+  const surface = Number(pricing.totalSurface || 0);
+  const totalHT = Number(pricing?.totals?.ht || pricing?.goods?.ht || 0);
+  const totalTTC = Number(pricing?.totals?.ttc || pricing?.goods?.ttc || 0);
 
-  // Coût horaire
-  const costH= toN(document.getElementById('cr_cout_h')?.value);
+  // Prix vendu / m²
+  const pvM2HT  = surface > 0 ? totalHT  / surface : 0;
+  const pvM2TTC = surface > 0 ? totalTTC / surface : 0;
 
-  // Produits €/m²
-  const pP1  = toN(document.getElementById('cr_p_p1')?.value);
-  const pP2  = toN(document.getElementById('cr_p_p2')?.value);
-  const pTe  = toN(document.getElementById('cr_p_teinte')?.value);
-  const pVe  = toN(document.getElementById('cr_p_vernis')?.value);
-  const pCo  = toN(document.getElementById('cr_p_cons')?.value);
+  // Coût de revient / m² (voir deriveCoutRevientM2)
+  const crM2 = deriveCoutRevientM2({ pvM2TTC });
+  const crMeuble = Number.isFinite(crM2) ? crM2 * surface : null;
 
-  // Ferrures
-  const tf   = toN(document.getElementById('cr_t_f')?.value); // h/pc
-  const pf   = toN(document.getElementById('cr_p_f')?.value); // €/pc
+  // Render
+  if (elSurface)    elSurface.textContent    = surface ? `${surface.toFixed(2)} m²` : '— m²';
+  if (elPvM2TTC)    elPvM2TTC.textContent    = surface ? `${euro(pvM2TTC)} /m²` : '— €/m²';
+  if (elPvM2HT)     elPvM2HT.textContent     = surface ? `${euro(pvM2HT)} /m²`  : '— €/m²';
+  if (elPvTotalTTC) elPvTotalTTC.textContent = euro(totalTTC);
+  if (elPvTotalHT)  elPvTotalHT.textContent  = euro(totalHT);
 
-  // Heures main d'oeuvre selon services cochés
-  let hM2 = 0;
-  if (state.services.poncage)      hM2 += tPon;
-  if (state.services.aerogommage)  hM2 += tAer;
-  if (state.services.peinture1)    hM2 += tP1;
-  if (state.services.peinture2)    hM2 += tP2;
-  if (state.services.teinte)       hM2 += tTe;
-  if (state.services.vernis)       hM2 += tVe;
-
-  // Manutention A/R (hdl * 2)
-  const heuresMO = (hM2 * surf) + (hdl * 2);
-  const coutMO   = heuresMO * costH;
-
-  // Coût produits / m²
-  let matM2 = 0;
-  if (state.services.peinture1)     matM2 += pP1;
-  if (state.services.peinture2)     matM2 += pP2;
-  if (state.services.teinte)        matM2 += pTe;
-  if (state.services.vernis)        matM2 += pVe;
-  if (state.services.consommables)  matM2 += pCo;
-
-  const coutMat = matM2 * surf;
-
-  // Ferrures
-  const nFerr = (toN(state.pieceCounts.ferrures_change) + toN(state.pieceCounts.ferrures_polissage));
-  const coutFerr = nFerr * (tf * costH + pf);
-
-  // Transport (optionnel)
-  const trInc = (document.getElementById('cr_include_transport')?.value || 'yes') === 'yes';
-  const coutTr = trInc ? (Number(pricing?.transport?.ttc) || 0) : 0;
-
-  // Total CR
-  const total = coutMO + coutMat + coutFerr + coutTr;
-
-  // Sortie UI
-  const set=(id,val)=>{ const el=document.getElementById(id); if(el) el.textContent = val; };
-  set('cr_out_surface', `${surf.toFixed(2)} m²`);
-  set('cr_out_heures',  `${heuresMO.toFixed(2)} h`);
-  set('cr_out_mo',      fmtEUR(coutMO));
-  set('cr_out_mat',     fmtEUR(coutMat));
-  set('cr_out_f',       fmtEUR(coutFerr));
-  set('cr_out_tr',      fmtEUR(coutTr));
-  set('cr_out_total',   fmtEUR(total));
+  if (Number.isFinite(crM2)) {
+    if (elCRm2)     elCRm2.textContent     = `${euro(crM2)} /m²`;
+    if (elCRmeuble) elCRmeuble.textContent = euro(crMeuble);
+    if (elHint)     elHint.hidden = true;
+  } else {
+    if (elCRm2)     elCRm2.textContent     = '— €/m²';
+    if (elCRmeuble) elCRmeuble.textContent = '— €';
+    if (elHint)     elHint.hidden = false;
+  }
 }
 
-/**
- * Câblage complet : branche les inputs CR et recalcule à chaque changement
- * à partir du pricing courant (computePricing).
- */
-export function wireCR(){
-  initCR(() => {
-    const pricing = computePricing();   // même base de calcul que l’onglet Devis
-    computeCR(pricing, state);
-  });
-}
+let bound = false;
+export function initCR() {
+  renderCR();
 
-// On exporte aussi par défaut, pour que tabs.js puisse appeler (wireCR || default)
-export default wireCR;
+  if (!bound) {
+    bound = true;
+    // Se met à jour si le devis change / reset
+    window.addEventListener('devis:changed', renderCR);
+    window.addEventListener('devis:reset', renderCR);
+
+    // Sécurité: si certains champs changent sans émettre d'événement global,
+    // on re-render quand l’utilisateur revient sur #cr
+    window.addEventListener('hashchange', () => {
+      if ((location.hash || '#devis').slice(1) === 'cr') renderCR();
+    });
+  }
+}
