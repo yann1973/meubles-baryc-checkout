@@ -27,24 +27,18 @@ function buildServicesM2() {
   if (!host) return;
   host.innerHTML = '';
 
-  const LABELS = {
-    poncage: 'Ponçage de finition',
-    aerogommage: 'Aérogommage',
-    peinture1: 'Peinture 1 couleur',
-    peinture2: 'Peinture 2 couleurs',
-    teinte: 'Teinte',
-    vernis: 'Vernis',
-    consommables: 'Consommables',
-  };
-  const order = ['poncage','aerogommage','peinture1','peinture2','teinte','vernis','consommables'];
+  const services = Array.isArray(PRICING.meta?.services)
+    ? PRICING.meta.services
+    : Object.keys(PRICING.servicesTTC || {}).map(key => ({ key, label: key }));
 
-  order.forEach(key => {
+  services.forEach(({ key, label }) => {
     const price = PRICING?.servicesTTC?.[key] ?? 0;
+
     const wrap = document.createElement('label');
     wrap.className = 'flex items-center justify-between gap-3 px-3 py-2 rounded-xl border border-neutral-200';
 
     const span = document.createElement('span');
-    span.textContent = `${LABELS[key] || key} (${euro(price)}/m²)`;
+    span.textContent = `${label || key} (${new Intl.NumberFormat('fr-FR',{style:'currency',currency:'EUR'}).format(price)}/m²)`;
 
     const input = document.createElement('input');
     input.type = 'checkbox';
