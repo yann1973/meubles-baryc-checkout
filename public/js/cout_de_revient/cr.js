@@ -2,14 +2,6 @@
 import { state } from '../state.js';
 import { PRICING } from '../devis/constants.js';
 import { computePricing } from '../devis/pricing.js';
-import * as PR from '../devis/pricing.js';
-
-
-const runCompute = () =>
-  (typeof PR.computePricing === 'function' ? PR.computePricing :
-   typeof PR.computeCR === 'function'       ? PR.computeCR :
-   null)?.();
-
 
 const euro = (n) => new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR' }).format(Number(n) || 0);
 const TARGET_RATE = 50; // objectif mini 50 € HT/h
@@ -170,7 +162,7 @@ function bindMoFerrures() {
 
 // ---- rendu : prestations + recap + temps max ----
 function renderServicesAndRecap() {
-  const pricing = runCompute();
+  const pricing = computePricing();
   if (!pricing) return;
 
   const surface   = Number(pricing.totalSurface || 0);
