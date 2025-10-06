@@ -1,5 +1,5 @@
 // public/js/transport/maps.js
-import { CONFIG } from '../config.js';
+import { PRICING } from '/js/devis/constants.js';
 import { computeDistance, refreshDistanceUI } from './distance.js';
 import { state } from '../state.js';
 
@@ -7,13 +7,23 @@ let mapsLoaded = false;
 let loading = false;
 let recomputeCb = null;
 
+// --- origine "société" (modifiable depuis l'onglet CR via applyConfig)
+function getCompanyOrigin() {
+  return PRICING?.transport?.baseAddress || '';
+}
+
+// --- clé Google depuis /env.js (window.ENV.*)
+function getMapsKey() {
+  return (window.ENV && window.ENV.GOOGLE_MAPS_API_KEY) || '';
+}
+
+// ---------- Autocomplete pour un <input> ----------
 function attachAutocomplete(input) {
   if (!input || input.__ac) return;
   if (!(window.google && google.maps && google.maps.places)) return;
 
   const opts = {
-    // 'geocode' autorise adresses + villes (mieux pour proposer une ville seule)
-    types: ['geocode'],
+    types: ['geocode'], // adresses & villes
     componentRestrictions: { country: ['fr'] },
     fields: ['formatted_address','geometry','address_components'],
   };
@@ -36,10 +46,12 @@ function attachAutocomplete(input) {
       }
     }
 
+    // recalcul de distance après saisie d'une adresse
     computeDistance(recomputeCb);
   });
 }
 
+// ---------- Attache tous les inputs concernés ----------
 function setupAllInputs() {
   const client   = document.getElementById('clientAddressMain');
   const pickup   = document.getElementById('transportAddressPickup');
@@ -47,7 +59,7 @@ function setupAllInputs() {
 
   [client, pickup, delivery].forEach(el => attachAutocomplete(el));
 
-  // Auto-attach au focus (utile si la lib se charge après)
+  // Auto-attach au focus (si la lib se charge après)
   [client, pickup, delivery].forEach(el => {
     if (!el || el.__focusBound) return;
     el.__focusBound = true;
@@ -67,29 +79,33 @@ function setupAllInputs() {
   });
 }
 
-// Callback Google
+// ---------- Callback global pour l'API Google ----------
 window.__mapsInit = function () {
   mapsLoaded = true;
   setupAllInputs();
 };
 
-// Charge la lib Google Maps Places (évite doublons)
+// ---------- Charge l'API Google Maps Places (sans doublons) ----------
 export function loadGoogleMaps() {
   if (mapsLoaded || loading) return;
   if (document.getElementById('gmap-places-script')) return; // déjà injecté
   loading = true;
 
-  const key = CONFIG.GOOGLE_MAPS_API_KEY || '';
+  const key = getMapsKey();
+  if (!key) {
+    console.warn('[maps] GOOGLE_MAPS_API_KEY manquante (window.ENV.GOOGLE_MAPS_API_KEY). Charge quand même sans clé → échec probable.');
+  }
+
   const s = document.createElement('script');
   s.id = 'gmap-places-script';
   s.src = `https://maps.googleapis.com/maps/api/js?key=${encodeURIComponent(key)}&libraries=places&language=fr&region=FR&callback=__mapsInit`;
   s.async = true;
   s.defer = true;
-  s.onerror = () => console.error('Google Maps failed to load');
+  s.onerror = () => console.error('[maps] Google Maps failed to load');
   document.head.appendChild(s);
 }
 
-// Bindings UI + intégration au recalcul global (recompute)
+// ---------- Bindings UI + intégration au recompute global ----------
 export function initMapsBindings(onChange) {
   recomputeCb = typeof onChange === 'function' ? onChange : null;
 
@@ -105,7 +121,27 @@ export function initMapsBindings(onChange) {
   const deliveryDifferent   = document.getElementById('deliveryDifferent');
   const deliveryWrap        = document.getElementById('deliveryAddressWrap');
 
-  // Saisie manuelle distance
+  // --- Synchro avec l'ADMIN : adresse de référence & barème km
+  // Quand l'admin modifie l'adresse de référence dans l'onglet CR, on recalcule ici.
+  window.addEventListener('admin:transport-updated', () => {
+    // si l'utilisateur n'a pas rempli "pickup", on utilise l'origine société par défaut
+    const pickupEl = document.getElementById('transportAddressPickup');
+    const origin = getCompanyOrigin();
+    if (pickupEl && !pickupEl.value.trim() && origin) {
+      pickupEl.value = origin;
+    }
+    // si on est en mode "baryc" et non-manuel, relance un calcul
+    const isManual = !!manualToggle?.checked;
+    const isBaryc  = (modeSel?.value || state?.transport?.mode) === 'baryc';
+    if (isBaryc && !isManual) {
+      computeDistance(recomputeCb);
+    } else {
+      // pas de calcul (manuel ou client), mais on met à jour le prix via recompute()
+      recomputeCb && recomputeCb();
+    }
+  }, { passive: true });
+
+  // --- Saisie manuelle distance
   if (manualToggle && distanceManual && distanceAutoBlock && !manualToggle.__bound) {
     manualToggle.__bound = true;
 
@@ -135,32 +171,31 @@ export function initMapsBindings(onChange) {
     });
   }
 
-  // Bouton "Recalculer avec Google"
+  // --- Bouton "Recalculer avec Google"
   if (recalcBtn && !recalcBtn.__bound) {
     recalcBtn.__bound = true;
     recalcBtn.addEventListener('click', () => computeDistance(recomputeCb));
   }
 
-  // Sélecteur de mode transport
+  // --- Sélecteur de mode transport
   if (modeSel && !modeSel.__bound) {
     modeSel.__bound = true;
     modeSel.addEventListener('change', () => {
       const val = modeSel.value;
 
       if (val === 'client') {
-        // Transport à vos soins → km = 0 + refresh + recalc
+        // Transport par le client → km = 0
         state.transport.mode = 'client';
         state.transport.pickKm = 0;
         state.transport.dropKm = 0;
         state.transport.distanceKm = 0;
-        refreshDistanceUI();          // met à jour le récap ("Livraison par vos soins")
-        recomputeCb && recomputeCb(); // met à jour les totaux (transport=0)
+        refreshDistanceUI();
+        recomputeCb && recomputeCb();
       } else {
-        // Par nos soins → recalcule la distance (ou conserve la valeur manuelle)
+        // Par nos soins → recalcule (ou conserve la valeur manuelle)
         state.transport.mode = 'baryc';
-        // ne pas remettre à 0 les mesures — on demande juste une MAJ de l’affichage/prix
-        const manualOn    = !!document.getElementById('manualDistanceToggle')?.checked;
-        const manualInput = document.getElementById('distanceManual');
+        const manualOn    = !!manualToggle?.checked;
+        const manualInput = distanceManual;
 
         if (manualOn) {
           const n = Number(manualInput?.value || 0);
@@ -168,13 +203,19 @@ export function initMapsBindings(onChange) {
           refreshDistanceUI();
           recomputeCb && recomputeCb();
         } else {
-          computeDistance(recomputeCb); // calcule Google + met à jour la ligne du récap
+          // pré-remplit l'origine par défaut si pickup vide
+          const pickupEl = document.getElementById('transportAddressPickup');
+          if (pickupEl && !pickupEl.value.trim()) {
+            const origin = getCompanyOrigin();
+            if (origin) pickupEl.value = origin;
+          }
+          computeDistance(recomputeCb);
         }
       }
     });
   }
 
-  // "Utiliser l’adresse client comme adresse de récupération"
+  // --- "Utiliser l’adresse client comme adresse de récupération"
   if (sameAsClient && !sameAsClient.__bound) {
     sameAsClient.__bound = true;
     sameAsClient.addEventListener('change', () => {
@@ -188,7 +229,7 @@ export function initMapsBindings(onChange) {
     });
   }
 
-  // "Adresse de livraison différente"
+  // --- "Adresse de livraison différente"
   if (deliveryDifferent && !deliveryDifferent.__bound) {
     deliveryDifferent.__bound = true;
     deliveryDifferent.addEventListener('change', () => {
@@ -203,6 +244,20 @@ export function initMapsBindings(onChange) {
     });
   }
 
-  // Premier état
-  refreshDistanceUI();
+  // --- Premier état
+  // si mode baryc + pas manuel → calcule ; sinon rafraîchit juste l'affichage
+  const isManual = !!manualToggle?.checked;
+  const isBaryc  = (modeSel?.value || state?.transport?.mode) === 'baryc';
+  if (isBaryc && !isManual) {
+    // pré-remplit l'origine si besoin
+    const pickupEl = document.getElementById('transportAddressPickup');
+    if (pickupEl && !pickupEl.value.trim()) {
+      const origin = getCompanyOrigin();
+      if (origin) pickupEl.value = origin;
+    }
+    computeDistance(recomputeCb);
+  } else {
+    refreshDistanceUI();
+    recomputeCb && recomputeCb();
+  }
 }
