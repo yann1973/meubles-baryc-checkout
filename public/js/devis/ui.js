@@ -1,11 +1,21 @@
 // public/js/devis/ui.js
-import { state } from '/js/state.js';
-import { PRICING } from '/js/devis/constants.js';
-import { computePricing } from '/js/devis/pricing.js';
-import { renderTotals, clearRecap } from '/js/devis/recap.js';
-import { renderRecapServices } from '/js/devis/recap-services.js';
-import { initMapsBindings } from '/js/transport/maps.js';
-import { refreshDistanceUI } from '/js/transport/distance.js';
+import { state } from '../state.js';
+import { PRICING } from './constants.js';
+import { computePricing } from './pricing.js';
+import { renderTotals, clearRecap } from './recap.js';
+import { renderRecapServices } from './recap-services.js';
+import { initMapsBindings } from '../transport/maps.js';
+import { refreshDistanceUI } from '../transport/distance.js';
+
+const DEFAULT_SERVICES = {
+  poncage: true,
+  aerogommage: false,
+  peinture1: false,
+  peinture2: false,
+  teinte: false,
+  vernis: false,
+  consommables: true,
+};
 
 function euro(n){
   return new Intl.NumberFormat('fr-FR',{style:'currency',currency:'EUR'}).format(Number(n)||0);
@@ -53,17 +63,13 @@ function buildServicesM2() {
   });
 }
 
-
-
-
-
-
-
 /* ===================== Pièces (ferrures) ===================== */
 function bindPieceInputs() {
   [['f_change','ferrures_change'],['f_polish','ferrures_polissage']].forEach(([id,key])=>{
     const el = document.getElementById(id);
     if (!el) return;
+    if (el.__bound) return; el.__bound = true;
+
     el.addEventListener('input', ()=>{
       const v = el.value === '' ? 0 : parseInt(el.value,10);
       state.pieceCounts[key] = Number.isFinite(v) ? v : 0;
@@ -72,15 +78,13 @@ function bindPieceInputs() {
   });
 }
 
-
-
-
-
 /* ===================== Dimensions ===================== */
 function bindDimensions() {
   [['longueur','L'],['largeur','W'],['hauteur','H']].forEach(([id,k])=>{
     const el = document.getElementById(id);
     if (!el) return;
+    if (el.__bound) return; el.__bound = true;
+
     el.addEventListener('input', ()=>{
       const v = el.value === '' ? 0 : Number(el.value);
       state[k] = Number.isFinite(v) ? v : 0;
@@ -89,15 +93,10 @@ function bindDimensions() {
   });
 }
 
-
-
-
-
-
 /* ===================== Type de meuble (si boutons présents) ===================== */
 function bindTypeButtons(){
   const host = document.getElementById('typeButtons');
-  if (!host) return; // pas bloquant si l’UI ne l’a pas
+  if (!host) return;
   const types = ["Chaise","Commode","Armoire","Lit","Console","Table","Buffet","Vaisselier","Bahut","Autre"];
   if (!host.__built){
     host.__built = true;
@@ -113,14 +112,8 @@ function bindTypeButtons(){
   }
 }
 
-
-
-
-
-
 /* ===================== Recompute global ===================== */
 function recompute(){
-  // computePricing doit retourner un objet { totalSurface, goods:{ht,tva,ttc}, transport:{...}, totals:{...} }
   const pricing = computePricing();
   if (!pricing) return;
 
@@ -131,65 +124,81 @@ function recompute(){
   if (surf) surf.textContent = `${(pricing.totalSurface||0).toFixed(2)} m²`;
 }
 
+/* ===================== Tel — chiffres uniquement ===================== */
+function bindPhoneDigitsOnly() {
+  const tel = document.getElementById('telephone');
+  const err = document.getElementById('telError');
 
+  if (!tel || tel.__digitsBound) return;
+  tel.__digitsBound = true;
 
+  const sanitize = () => {
+    const digits = (tel.value || '').replace(/\D/g, '').slice(0, 10);
+    if (tel.value !== digits) tel.value = digits;
+    if (err) {
+      if (digits.length > 0 && digits.length < 10) err.textContent = '10 chiffres requis.';
+      else err.textContent = '';
+    }
+  };
 
+  tel.addEventListener('input', sanitize);
+  tel.addEventListener('paste', (e) => {
+    e.preventDefault();
+    const pasted = (e.clipboardData.getData('text') || '').replace(/\D/g, '').slice(0, 10);
+    tel.value = pasted;
+    sanitize();
+  });
+  tel.addEventListener('keypress', (e) => {
+    if (!/[0-9]/.test(e.key)) e.preventDefault();
+  });
+}
 
+/* ===================== RESET COMPLET (état + UI + storage) ===================== */
+export function resetDevis() {
+  const host = document.querySelector('#view');
+  if (!host) return;
 
-
-/* ======= RESET COMPLET DU DEVIS (bouton "Vider le récap") ======= */
-
-
-function resetDevisForm(){
   // 1) State par défaut
   state.type = 'Table';
   state.L = 0; state.W = 0; state.H = 0;
 
+  state.pieceCounts = state.pieceCounts || {};
   state.pieceCounts.ferrures_change = 0;
   state.pieceCounts.ferrures_polissage = 0;
 
-  const DEFAULT_SERVICES = {
-    poncage:true, aerogommage:false, peinture1:false, peinture2:false,
-    teinte:false, vernis:false, consommables:true
-  };
   state.services = { ...DEFAULT_SERVICES };
 
+  state.transport = state.transport || {};
   state.transport.mode = 'client';
   state.transport.pickKm = 0;
   state.transport.dropKm = 0;
   state.transport.distanceKm = 0;
 
-  // 2) Inputs — dimensions
+  // 2) Form — valeurs
   const setVal = (id,val)=>{ const el=document.getElementById(id); if(el){ el.value = String(val); } };
   setVal('longueur','0'); setVal('largeur','0'); setVal('hauteur','0');
-
-  // 3) Inputs — pièces
   setVal('f_change','0'); setVal('f_polish','0');
 
-  // 4) Inputs — services (checkboxes)
-  document.querySelectorAll('#servicesM2 input[type="checkbox"][data-key]').forEach(cb=>{
+  // Services (checkboxes) -> valeurs par défaut
+  host.querySelectorAll('#servicesM2 input[type="checkbox"][data-key]').forEach(cb=>{
     const key = cb.getAttribute('data-key');
     cb.checked = !!DEFAULT_SERVICES[key];
   });
 
-  // 5) Inputs — client
+  // Client
   ['nom','prenom','telephone','email','clientAddressMain','description'].forEach(id=>{
     const el=document.getElementById(id); if(el) el.value='';
   });
   const sel = document.getElementById('connaissance');
   if (sel) sel.value = '';
 
-
-
-
-
-  
-  // 6) Inputs — transport
+  // Transport
   const modeSel = document.getElementById('transportMode');
   if (modeSel){
     modeSel.value = 'client';
     modeSel.dispatchEvent(new Event('change',{bubbles:true}));
   }
+
   const sameAsClient = document.getElementById('sameAsClient');
   if (sameAsClient) sameAsClient.checked = false;
 
@@ -203,137 +212,69 @@ function resetDevisForm(){
   });
 
   const manualToggle = document.getElementById('manualDistanceToggle');
-  const distanceManual = document.getElementById('distanceManual');
-  const distanceAutoBlock = document.getElementById('distanceAutoBlock');
   if (manualToggle){
     manualToggle.checked = false;
     manualToggle.dispatchEvent(new Event('change',{bubbles:true}));
   }
+  const distanceManual = document.getElementById('distanceManual');
+  const distanceAutoBlock = document.getElementById('distanceAutoBlock');
   if (distanceManual) distanceManual.value = '0';
   if (distanceAutoBlock) distanceAutoBlock.textContent = '0 km';
 
-  // 7) Effacer messages d’erreur
+  // 3) Effacer messages d’erreur
   ['clientErrors','telError','emailError','distanceError'].forEach(id=>{
     const el=document.getElementById(id); if(el) el.textContent='';
   });
 
-  // 8) UI distance + recap
-  refreshDistanceUI();
-  clearRecap();    // vide l’affichage du récap
-  recompute();     // recalcule proprement les totaux (tout à 0)
-}
-
-
-
-
-
-/* ======= Bouton "Vider le récapitulatif" ======= */
-function bindClearRecapButton(){
-  const btn = document.getElementById('btnClearRecap');
-  if (btn && !btn.__bound){
-    btn.__bound = true;
-    btn.addEventListener('click', resetDevisForm);
+  // 4) Storage — vide clés possibles de panier/état
+  const PANIER_KEYS = ['devis_cart','panier','cart','DEVIS_CART','baryc_cart','checkout_items','devis-state'];
+  PANIER_KEYS.forEach(k => { try { localStorage.removeItem(k); sessionStorage.removeItem(k); } catch {} });
+  // Fuzzy match
+  for (let i = localStorage.length - 1; i >= 0; i--) {
+    const k = localStorage.key(i);
+    if (/(devis|cart|panier)/i.test(k)) localStorage.removeItem(k);
   }
+  for (let i = sessionStorage.length - 1; i >= 0; i--) {
+    const k = sessionStorage.key(i);
+    if (/(devis|cart|panier)/i.test(k)) sessionStorage.removeItem(k);
+  }
+
+  // 5) UI distance + recap + recompute
+  refreshDistanceUI();
+  clearRecap();
+  recompute();
+
+  // 6) notifier les autres modules
+  window.dispatchEvent(new CustomEvent('devis:reset'));
+  console.log('[devis] reset complet effectué');
 }
-
-
-// --- à coller quelque part en haut du fichier (sous tes autres petites fonctions) ---
-
-
-function bindPhoneDigitsOnly() {
-  const tel = document.getElementById('telephone');
-  const err = document.getElementById('telError');
-
-  if (!tel || tel.__digitsBound) return;
-  tel.__digitsBound = true;
-
-  const sanitize = () => {
-    const digits = (tel.value || '').replace(/\D/g, '').slice(0, 10);
-    if (tel.value !== digits) tel.value = digits;
-    // petit message si < 10 chiffres
-    if (err) {
-      if (digits.length > 0 && digits.length < 10) {
-        err.textContent = '10 chiffres requis.';
-      } else {
-        err.textContent = '';
-      }
-    }
-  };
-
-  tel.addEventListener('input', sanitize);
-  tel.addEventListener('paste', (e) => {
-    e.preventDefault();
-    const pasted = (e.clipboardData.getData('text') || '').replace(/\D/g, '').slice(0, 10);
-    tel.value = pasted;
-    sanitize();
-  });
-  tel.addEventListener('keypress', (e) => {
-    // bloque tout sauf 0–9
-    if (!/[0-9]/.test(e.key)) e.preventDefault();
-  });
-}
-
-
-
-
 
 /* ===================== Entrée principale ===================== */
 export function initDevis(){
-  buildServicesM2();
-  bindTypeButtons();  // non bloquant si l'UI n'a pas la zone des types
-  bindDimensions();
-  bindPieceInputs();
-
-  // Google Maps + liens avec recompute (ne remet PAS les mesures à 0)
-  initMapsBindings(recompute);
-
-  // Bouton "Vider le récap"
-  bindClearRecapButton();
-
-  bindPhoneDigitsOnly();
-  
-  // Premier calcul
-  recompute();
-}
-
-
-
-// public/js/devis/ui.js
-
-export function resetDevis() {
   const host = document.querySelector('#view');
   if (!host) return;
 
-  // 1) inputs/selects/textarea -> valeurs par défaut
-  host.querySelectorAll('input, select, textarea').forEach((el) => {
-    const tag = el.tagName.toLowerCase();
-    const type = (el.getAttribute('type') || '').toLowerCase();
+  // anti double-initialisation
+  if (host.dataset.devisInit === '1') {
+    console.debug('[devis] déjà initialisé — skip');
+    return;
+  }
+  host.dataset.devisInit = '1';
 
-    if (type === 'checkbox' || type === 'radio') {
-      el.checked = false;
-    } else if (tag === 'select') {
-      el.selectedIndex = 0;
-    } else {
-      el.value = '';
-    }
+  // si pas d’état services, initialise-le
+  state.services = state.services ? { ...state.services } : { ...DEFAULT_SERVICES };
+  state.pieceCounts = state.pieceCounts || { ferrures_change: 0, ferrures_polissage: 0 };
+  state.transport = state.transport || { mode: 'client', pickKm: 0, dropKm: 0, distanceKm: 0 };
 
-    // enlève l'état d'erreur/succès éventuel
-    el.classList.remove('is-invalid', 'is-valid');
-    el.removeAttribute('aria-invalid');
-  });
+  buildServicesM2();
+  bindTypeButtons();      // non bloquant si la zone n'existe pas
+  bindDimensions();
+  bindPieceInputs();
+  bindPhoneDigitsOnly();
 
-  // 2) zones de sortie (totaux, récap) -> vides/0
-  host.querySelectorAll('[data-output], [data-total], .js-output, .js-total').forEach((el) => {
-    el.textContent = '';
-  });
+  // Google Maps + bindings distance (protégé)
+  try { initMapsBindings(recompute); } catch (e) { console.warn('[devis] initMapsBindings', e); }
 
-  // 3) panier côté storage -> purge
-  // adapte la/les clé(s) à ton app si besoin
-  const PANIER_KEYS = ['devis_cart', 'panier', 'cart', 'DEVIS_CART'];
-  PANIER_KEYS.forEach((k) => localStorage.removeItem(k));
-
-  // 4) avertir les autres modules (si certains recalculent à l’écoute de cet event)
-  window.dispatchEvent(new CustomEvent('devis:reset'));
-
-  console.log('[devis] reset complet effectué');
+  // Premier calcul
+  recompute();
 }

@@ -33,7 +33,7 @@ async function importModule(specFromHere) {
     (await tryOne(abs, 'as-is')) ||
     (await tryOne(clean, 'no-query')) ||
     (await tryOne(withBust, 'cache-bust')) ||
-    (await import(/* @vite-ignore */ abs)) // dernier essai
+    (await import(/* @vite-ignore */ abs)) // dernier essai visible en console si ça casse
   );
 }
 
@@ -45,11 +45,11 @@ export function initTabs() {
 
   if (!view) console.warn('[tabs] #view introuvable');
 
-  // ⚠️ chemins RELATIFS à tabs.js
+  // chemins RELATIFS à tabs.js
   const TABS = {
-    devis: { moduleFromHere: './devis/ui.js',            inits: ['initDevis', 'default'] },
-    cr:    { moduleFromHere: './cout_de_revient/cr.js',  inits: ['initCR', 'default'] },
-    ch:    { moduleFromHere: './cout_horaire/ch.js',     inits: ['initCH', 'default'] },
+    devis: { moduleFromHere: './devis/ui.js',           inits: ['initDevis', 'default'] },
+    cr:    { moduleFromHere: './cout_de_revient/cr.js', inits: ['initCR', 'default'] },
+    ch:    { moduleFromHere: './cout_horaire/ch.js',    inits: ['initCH', 'default'] },
   };
   const VALID_TABS = new Set(Object.keys(TABS));
 
@@ -71,80 +71,82 @@ export function initTabs() {
     });
   };
 
-  const scrollForTab = (tab) => {
-    if (tab === 'devis') {
-      const anchor = document.querySelector('#devis');
-      if (anchor) {
-        anchor.scrollIntoView({ behavior: 'smooth', block: 'start' });
-        return;
-      }
-    }
-    window.scrollTo({ top: 0, behavior: 'smooth' });
-  };
-
   const pickInit = (mod, names) => {
     for (const n of names) if (typeof mod?.[n] === 'function') return mod[n];
     return null;
   };
 
   const open = async (tab, { allowScroll = false } = {}) => {
-  if (!VALID_TABS.has(tab)) tab = 'devis';
-  if (loading || currentTab === tab) return;
+    if (!VALID_TABS.has(tab)) tab = 'devis';
+    if (loading || currentTab === tab) return;
 
-  loading = true;
-  const myReq = ++reqId;
-  console.debug('[tabs] open:', tab);
+    loading = true;
+    const myReq = ++reqId;
+    console.debug('[tabs] open:', tab);
 
-  try {
-    if (view) view.innerHTML = '';
-    if (typeof loadView !== 'function') throw new Error('loader.js: loadView introuvable');
-    await loadView(tab);
+    try {
+      if (view) view.innerHTML = '';
+      if (typeof loadView !== 'function') throw new Error('loader.js: loadView introuvable');
+      await loadView(tab);
 
-    if (myReq !== reqId) return; // anti-course
+      if (myReq !== reqId) return; // anti-course
 
-    setActive(tab);
+      setActive(tab);
 
-    const targetHash = '#' + tab;
-    if (location.hash !== targetHash) history.replaceState(null, '', targetHash);
+      const targetHash = '#' + tab;
+      if (location.hash !== targetHash) history.replaceState(null, '', targetHash);
 
-    const { moduleFromHere, inits } = TABS[tab];
-    // si tu utilises importModule(...) garde-le ; sinon remets import(...)
-    const mod = await importModule(moduleFromHere);
-    const init = pickInit(mod, inits) || (() => {});
-    init();
+      const { moduleFromHere, inits } = TABS[tab];
+      const mod = await importModule(moduleFromHere);
+      const init = pickInit(mod, inits) || (() => {});
+      init();
 
-    // ⬇️ pas de scroll automatique, sauf si autorisé (ex: navigation par hash externe)
-    if (allowScroll && tab === 'devis') {
-      const anchor = document.querySelector('#devis');
-      anchor?.scrollIntoView({ behavior: 'smooth', block: 'start', inline: 'nearest' });
-    }
-
-    currentTab = tab;
-  } catch (e) {
-    console.error('[tabs] open error:', e);
-    if (view) {
-      view.innerHTML = `
-        <div class="max-w-3xl mx-auto p-4 mt-6 rounded-xl border border-rose-200 bg-rose-50 text-rose-900">
-          <div class="font-semibold mb-1">Erreur de chargement de l’onglet “${tab}”</div>
-          <pre class="text-xs overflow-auto">${(e && e.message) || e}</pre>
-        </div>`;
-    }
-  } finally {
-    loading = false;
+      // --- reset demandé depuis l'URL ?reset=1 (seulement pour l'onglet Devis)
+if (tab === 'devis') {
+  const params = new URLSearchParams(location.search);
+  if (params.get('reset') === '1' && typeof mod.resetDevis === 'function') {
+    console.debug('[tabs] resetDevis() called from URL param');
+    try { mod.resetDevis(); } catch (e) { console.warn('[devis] reset error:', e); }
+    // nettoie l'URL pour ne pas relancer le reset ensuite
+    params.delete('reset');
+    const newUrl = location.pathname + (params.toString() ? '?' + params : '') + location.hash;
+    history.replaceState(null, '', newUrl);
   }
-};
+}
 
-// ⬇️ handlers: clic = pas de scroll ; hashchange = scroll autorisé
-tabDevis?.addEventListener('click', () => open('devis', { allowScroll: false }));
-tabCR?.addEventListener('click',    () => open('cr',    { allowScroll: false }));
-tabCH?.addEventListener('click',    () => open('ch',    { allowScroll: false }));
+      // AUCUN scroll automatique par défaut
+      if (allowScroll && tab === 'devis') {
+        const anchor = document.querySelector('#devis');
+        anchor?.scrollIntoView({ behavior: 'smooth', block: 'start', inline: 'nearest' });
+      }
 
-window.addEventListener('hashchange', () => {
-  const next = (location.hash || '#devis').slice(1);
-  open(VALID_TABS.has(next) ? next : 'devis', { allowScroll: true });
-}, { passive: true });
+      currentTab = tab;
+    } catch (e) {
+      console.error('[tabs] open error:', e);
+      if (view) {
+        view.innerHTML = `
+          <div class="max-w-3xl mx-auto p-4 mt-6 rounded-xl border border-rose-200 bg-rose-50 text-rose-900">
+            <div class="font-semibold mb-1">Erreur de chargement de l’onglet “${tab}”</div>
+            <pre class="text-xs overflow-auto">${(e && e.message) || e}</pre>
+          </div>`;
+      }
+    } finally {
+      loading = false;
+    }
+  };
 
-// Ouverture initiale: pas de scroll forcé
-const initial = (location.hash || '#devis').slice(1);
-open(VALID_TABS.has(initial) ? initial : 'devis', { allowScroll: false });
+  // clics: pas de scroll forcé
+  tabDevis?.addEventListener('click', () => open('devis', { allowScroll: false }));
+  tabCR?.addEventListener('click',    () => open('cr',    { allowScroll: false }));
+  tabCH?.addEventListener('click',    () => open('ch',    { allowScroll: false }));
+
+  // navigation par hash: autorise le scroll (si l'utilisateur tape /#devis)
+  window.addEventListener('hashchange', () => {
+    const next = (location.hash || '#devis').slice(1);
+    open(VALID_TABS.has(next) ? next : 'devis', { allowScroll: true });
+  }, { passive: true });
+
+  // ouverture initiale: pas de scroll forcé
+  const initial = (location.hash || '#devis').slice(1);
+  open(VALID_TABS.has(initial) ? initial : 'devis', { allowScroll: false });
 }

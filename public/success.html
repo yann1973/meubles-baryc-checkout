@@ -4,14 +4,17 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Paiement confirmé — Meubles Baryc</title>
+  <meta name="robots" content="noindex" />
   <script src="https://cdn.tailwindcss.com"></script>
 </head>
 <body class="min-h-screen bg-neutral-50 text-neutral-900 grid place-items-center">
-  <div class="bg-white border border-neutral-200 rounded-2xl p-8 shadow-sm max-w-md text-center">
-    <div class="text-3xl">✅</div>
+  <main class="bg-white border border-neutral-200 rounded-2xl p-8 shadow-sm max-w-md text-center">
+    <div aria-hidden="true" class="text-3xl">✅</div>
     <h1 class="text-xl font-semibold mt-2">Merci ! Paiement confirmé</h1>
     <p class="text-sm text-neutral-600 mt-1">Votre commande a bien été enregistrée.</p>
-    <a href="/" class="mt-4 inline-flex items-center justify-center h-10 px-4 rounded-lg bg-neutral-900 text-white">Retour au calculateur</a>
-  </div>
+
+    <!-- IMPORTANT : le paramètre ?reset=1 déclenche le reset côté Devis -->
+    <a href="/?reset=1#devis" class="mt-4 inline-flex items-center justify-center h-10 px-4 rounded-lg bg-neutral-900 text-white"> Retour au calculateur</a>
+  </main>
 </body>
 </html>
