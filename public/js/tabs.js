@@ -1,7 +1,5 @@
 console.log("[DEPLOY TEST] " + new Date().toISOString());
 
-
-
 // public/js/tabs.js
 import { loadView } from '/js/loader.js';
 
@@ -80,6 +78,22 @@ export function initTabs() {
     return null;
   };
 
+  const clearStoragesIfAsked = () => {
+    try {
+      // supprime les clés connues + fuzzy match
+      const KNOWN = ['devis_cart','panier','cart','DEVIS_CART','baryc_cart','checkout_items','devis-state','mb_cart'];
+      KNOWN.forEach(k => { localStorage.removeItem(k); sessionStorage.removeItem(k); });
+      for (let i = localStorage.length - 1; i >= 0; i--) {
+        const k = localStorage.key(i);
+        if (/(devis|cart|panier|baryc|checkout)/i.test(k)) localStorage.removeItem(k);
+      }
+      for (let i = sessionStorage.length - 1; i >= 0; i--) {
+        const k = sessionStorage.key(i);
+        if (/(devis|cart|panier|baryc|checkout)/i.test(k)) sessionStorage.removeItem(k);
+      }
+    } catch {}
+  };
+
   const open = async (tab, { allowScroll = false } = {}) => {
     if (!VALID_TABS.has(tab)) tab = 'devis';
     if (loading || currentTab === tab) return;
@@ -90,6 +104,20 @@ export function initTabs() {
 
     try {
       if (view) view.innerHTML = '';
+
+      // --- détecte la demande de reset (query OU flag) ---
+      let resetAsked = false;
+      let params;
+      if (tab === 'devis') {
+        params = new URLSearchParams(location.search);
+        const flag = localStorage.getItem('force_reset') === '1';
+        resetAsked = (params.get('reset') === '1') || flag;
+        if (resetAsked) {
+          console.debug('[tabs] pre-clear storages before loadView');
+          clearStoragesIfAsked();     // ← vide les stockages AVANT l’injection de la vue
+        }
+      }
+
       if (typeof loadView !== 'function') throw new Error('loader.js: loadView introuvable');
       await loadView(tab);
 
@@ -101,37 +129,24 @@ export function initTabs() {
       if (location.hash !== targetHash) history.replaceState(null, '', targetHash);
 
       const { moduleFromHere, inits } = TABS[tab];
-      const mod = await importModule(moduleFromHere);
-      const init = pickInit(mod, inits) || (() => {});
+      const mod  = await importModule(moduleFromHere);
+      const init = pickInit(mod, inits) || (()=>{});
       init();
 
-      // --- reset demandé depuis l'URL ?reset=1 ou via flag localStorage
-if (tab === 'devis') {
-  const params = new URLSearchParams(location.search);
-  const flag = localStorage.getItem('force_reset') === '1';
-  const asked = params.get('reset') === '1' || flag;
+      // --- applique le reset après init si demandé ---
+      if (tab === 'devis' && resetAsked) {
+        console.debug('[tabs] resetDevis() requested');
+        try { typeof mod.resetDevis === 'function' && mod.resetDevis(); } catch(e) { console.warn('[tabs] reset error:', e); }
+        // nettoie URL + flag pour ne pas re-reset
+        params.delete('reset');
+        const newUrl = location.pathname + (params.toString() ? '?' + params : '') + location.hash;
+        history.replaceState(null, '', newUrl);
+        try { localStorage.removeItem('force_reset'); } catch {}
+        // notifie les éventuels écouteurs
+        window.dispatchEvent(new CustomEvent('devis:changed', { detail: { reason: 'reset' } }));
+      }
 
-  if (asked) {
-    console.debug('[tabs] resetDevis() requested');
-    try {
-      if (typeof mod.resetDevis === 'function') mod.resetDevis();
-      else console.warn('[tabs] mod.resetDevis absente');
-    } catch (e) {
-      console.warn('[tabs] resetDevis error:', e);
-    }
-
-    // nettoie URL + flag pour éviter de re-reset
-    params.delete('reset');
-    const newUrl = location.pathname + (params.toString() ? '?' + params : '') + location.hash;
-    history.replaceState(null, '', newUrl);
-    try { localStorage.removeItem('force_reset'); } catch {}
-  }
-}
-
-
-window.dispatchEvent(new CustomEvent('devis:changed', { detail: { reason: 'reset' } }));
-
-      // AUCUN scroll automatique par défaut
+      // pas de scroll auto (sauf navigation par hash si allowScroll)
       if (allowScroll && tab === 'devis') {
         const anchor = document.querySelector('#devis');
         anchor?.scrollIntoView({ behavior: 'smooth', block: 'start', inline: 'nearest' });
