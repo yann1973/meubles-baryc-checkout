@@ -3,88 +3,147 @@ import { state } from '../state.js';
 import { PRICING } from '../devis/constants.js';
 import { computePricing } from '../devis/pricing.js';
 
-const euro = (n) =>
-  new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR' })
-    .format(Number(n) || 0);
+const euro = (n) => new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR' }).format(Number(n) || 0);
+
+// Mêmes clés/ordre que Devis
+const ORDER = ['poncage','aerogommage','peinture1','peinture2','teinte','vernis','consommables'];
+const LABELS = {
+  poncage: 'Ponçage de finition',
+  aerogommage: 'Aérogommage',
+  peinture1: 'Peinture 1 couleur',
+  peinture2: 'Peinture 2 couleurs',
+  teinte: 'Teinte',
+  vernis: 'Vernis',
+  consommables: 'Consommables',
+};
 
 /**
- * Déduit le coût de revient / m² à partir de:
- *  - PRICING.costs.m2  (si défini ⇒ direct)
- *  - sinon, si PRICING.margin.ttcRate est défini (ex: 0.3), on approxime:
- *      cr_m2 = pv_m2_ttc * (1 - marginRate)
- *  - sinon: null (affiche un hint pour config)
+ * Retourne le coût de revient (€/m²) pour une prestation.
+ * Priorité:
+ *  1) PRICING.costs.servicesM2[key] (coût direct saisi)
+ *  2) approximation à partir du prix de vente (PRICING.servicesTTC[key]) et d’une marge:
+ *     - marge HT si PRICING.margin.htRate est défini
+ *     - sinon marge TTC si PRICING.margin.ttcRate
+ *     CR = PV * (1 - marge)
+ *  3) sinon null (inconnu)
  */
-function deriveCoutRevientM2({ pvM2TTC }) {
-  // 1) le plus propre: tu définis PRICING.costs.m2 dans constants.js
-  const direct = PRICING?.costs?.m2;
-  if (Number.isFinite(direct) && direct >= 0) return direct;
+function getServiceCostM2(key) {
+  const direct = PRICING?.costs?.servicesM2?.[key];
+  if (Number.isFinite(direct)) return Math.max(0, Number(direct));
 
-  // 2) approximation à partir de la marge TTC si fournie
-  const marginRate = PRICING?.margin?.ttcRate;
-  if (Number.isFinite(marginRate)) {
-    const r = Math.max(0, Math.min(1, Number(marginRate)));
-    return (Number(pvM2TTC) || 0) * (1 - r);
-  }
+  const pvService = PRICING?.servicesTTC?.[key]; // €/m² vendu (côté Devis)
+  if (!Number.isFinite(pvService)) return null;
 
-  // 3) pas de donnée exploitable
+  const mHT  = PRICING?.margin?.htRate;
+  const mTTC = PRICING?.margin?.ttcRate;
+  if (Number.isFinite(mHT))  return pvService * (1 - Math.max(0, Math.min(1, mHT)));
+  if (Number.isFinite(mTTC)) return pvService * (1 - Math.max(0, Math.min(1, mTTC)));
+
+  // pas de marge dispo → on ne peut pas estimer
   return null;
 }
 
 function renderCR() {
-  const elSurface       = document.getElementById('cr-surface');
-  const elPvM2TTC       = document.getElementById('cr-pv-m2-ttc');
-  const elPvM2HT        = document.getElementById('cr-pv-m2-ht');
-  const elCRm2          = document.getElementById('cr-cr-m2');
-  const elCRmeuble      = document.getElementById('cr-cr-meuble');
-  const elPvTotalTTC    = document.getElementById('cr-pv-total-ttc');
-  const elPvTotalHT     = document.getElementById('cr-pv-total-ht');
-  const elHint          = document.getElementById('cr-hint');
-
   const pricing = computePricing();
   if (!pricing) return;
 
-  const surface = Number(pricing.totalSurface || 0);
-  const totalHT = Number(pricing?.totals?.ht || pricing?.goods?.ht || 0);
-  const totalTTC = Number(pricing?.totals?.ttc || pricing?.goods?.ttc || 0);
+  const surface   = Number(pricing.totalSurface || 0);
+  const totalHT   = Number(pricing?.totals?.ht || pricing?.goods?.ht || 0);
+  const totalTTC  = Number(pricing?.totals?.ttc || pricing?.goods?.ttc || 0);
+  const pvM2HT    = surface > 0 ? totalHT  / surface : 0;
+  const pvM2TTC   = surface > 0 ? totalTTC / surface : 0;
 
-  // Prix vendu / m²
-  const pvM2HT  = surface > 0 ? totalHT  / surface : 0;
-  const pvM2TTC = surface > 0 ? totalTTC / surface : 0;
+  // ——— Per-prestation
+  const list = document.getElementById('cr-services-list');
+  if (list) list.innerHTML = '';
 
-  // Coût de revient / m² (voir deriveCoutRevientM2)
-  const crM2 = deriveCoutRevientM2({ pvM2TTC });
-  const crMeuble = Number.isFinite(crM2) ? crM2 * surface : null;
+  let crM2Total = 0;
+  let anyUnknown = false;
 
-  // Render
-  if (elSurface)    elSurface.textContent    = surface ? `${surface.toFixed(2)} m²` : '— m²';
-  if (elPvM2TTC)    elPvM2TTC.textContent    = surface ? `${euro(pvM2TTC)} /m²` : '— €/m²';
-  if (elPvM2HT)     elPvM2HT.textContent     = surface ? `${euro(pvM2HT)} /m²`  : '— €/m²';
-  if (elPvTotalTTC) elPvTotalTTC.textContent = euro(totalTTC);
-  if (elPvTotalHT)  elPvTotalHT.textContent  = euro(totalHT);
+  ORDER.forEach((key) => {
+    const selected = !!state?.services?.[key];
+    const costM2 = getServiceCostM2(key);             // peut être null
+    const effectiveM2 = selected && Number.isFinite(costM2) ? costM2 : 0;
+    crM2Total += effectiveM2;
 
-  if (Number.isFinite(crM2)) {
-    if (elCRm2)     elCRm2.textContent     = `${euro(crM2)} /m²`;
-    if (elCRmeuble) elCRmeuble.textContent = euro(crMeuble);
-    if (elHint)     elHint.hidden = true;
-  } else {
-    if (elCRm2)     elCRm2.textContent     = '— €/m²';
-    if (elCRmeuble) elCRmeuble.textContent = '— €';
-    if (elHint)     elHint.hidden = false;
-  }
+    const costMeuble = effectiveM2 * surface;         // €/meuble pour cette prestation
+
+    const row = document.createElement('div');
+    row.className = `flex items-center justify-between gap-3 px-3 py-2 rounded-xl border ${
+      selected ? 'border-neutral-200 bg-white' : 'border-neutral-200/60 bg-neutral-50 text-neutral-500'
+    }`;
+
+    // libellé + statut
+    const left = document.createElement('div');
+    left.className = 'flex items-center gap-2';
+    const dot = document.createElement('span');
+    dot.className = `inline-block h-2.5 w-2.5 rounded-full ${selected ? 'bg-emerald-500' : 'bg-neutral-300'}`;
+    const label = document.createElement('span');
+    label.textContent = LABELS[key] || key;
+    left.append(dot, label);
+
+    // chiffres
+    const right = document.createElement('div');
+    right.className = 'text-right text-sm';
+    const l1 = document.createElement('div');
+    const l2 = document.createElement('div');
+
+    if (Number.isFinite(costM2)) {
+      l1.textContent = `${euro(costM2)} /m²`;
+      l2.textContent = `${euro(costMeuble)} /meuble`;
+    } else {
+      l1.textContent = '— €/m²';
+      l2.textContent = '— € /meuble';
+      anyUnknown = true;
+    }
+
+    right.append(l1, l2);
+    row.append(left, right);
+    list?.appendChild(row);
+  });
+
+  // ——— Totaux & recap
+  const crM2     = crM2Total;               // somme des coûts €/m² des prestations cochées
+  const crMeuble = crM2 * surface;          // coût total du meuble
+
+  const elSurface   = document.getElementById('cr-surface');
+  const elCrM2      = document.getElementById('cr-m2');
+  const elCrMeuble  = document.getElementById('cr-meuble');
+  const elPvM2HT    = document.getElementById('pv-m2-ht');
+  const elPvM2TTC   = document.getElementById('pv-m2-ttc');
+  const elPvTotalHT = document.getElementById('pv-total-ht');
+  const elPvTotalTTC= document.getElementById('pv-total-ttc');
+  const elRent      = document.getElementById('rentabilite');
+  const elHint      = document.getElementById('cr-hint');
+
+  if (elSurface)    elSurface.textContent   = surface ? `${surface.toFixed(2)} m²` : '— m²';
+  if (elCrM2)       elCrM2.textContent      = Number.isFinite(crM2)     ? `${euro(crM2)} /m²` : '— €/m²';
+  if (elCrMeuble)   elCrMeuble.textContent  = Number.isFinite(crMeuble) ? euro(crMeuble)      : '— €';
+
+  if (elPvM2HT)     elPvM2HT.textContent    = surface ? `${euro(pvM2HT)} /m²`  : '— €/m²';
+  if (elPvM2TTC)    elPvM2TTC.textContent   = surface ? `${euro(pvM2TTC)} /m²` : '— €/m²';
+  if (elPvTotalHT)  elPvTotalHT.textContent = euro(totalHT);
+  if (elPvTotalTTC) elPvTotalTTC.textContent= euro(totalTTC);
+
+  // Rentabilité sur HT : (PV_HT - CR) / PV_HT
+  const rent = totalHT > 0 ? ((totalHT - crMeuble) / totalHT) * 100 : NaN;
+  if (elRent) elRent.textContent = Number.isFinite(rent) ? `${rent.toFixed(1)} %` : '— %';
+
+  if (elHint) elHint.classList.toggle('hidden', !anyUnknown);
 }
 
+// Init + synchro en temps réel
 let bound = false;
 export function initCR() {
   renderCR();
 
   if (!bound) {
     bound = true;
-    // Se met à jour si le devis change / reset
+    // Toute modification du devis déclenche un rerender du CR
     window.addEventListener('devis:changed', renderCR);
     window.addEventListener('devis:reset', renderCR);
 
-    // Sécurité: si certains champs changent sans émettre d'événement global,
-    // on re-render quand l’utilisateur revient sur #cr
+    // Sécurité : quand on revient sur #cr
     window.addEventListener('hashchange', () => {
       if ((location.hash || '#devis').slice(1) === 'cr') renderCR();
     });
