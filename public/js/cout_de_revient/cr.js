@@ -19,7 +19,6 @@ const LABELS = {
 // ---- stockage des coûts saisis (€/m²) ----
 const LS_KEY = 'cr_user_costs_v1';
 let userCosts = loadUserCosts();
-
 function loadUserCosts() {
   try {
     const raw = localStorage.getItem(LS_KEY);
@@ -31,61 +30,63 @@ function loadUserCosts() {
       if (Number.isFinite(v) && v >= 0) out[k] = v;
     }
     return out;
-  } catch {
-    return {};
-  }
+  } catch { return {}; }
 }
-function saveUserCosts() {
-  try { localStorage.setItem(LS_KEY, JSON.stringify(userCosts)); } catch {}
-}
+function saveUserCosts() { try { localStorage.setItem(LS_KEY, JSON.stringify(userCosts)); } catch {} }
 function setUserCost(key, value) {
   if (!ORDER.includes(key)) return;
-  if (value === '' || value == null || !Number.isFinite(Number(value))) {
-    delete userCosts[key];
-  } else {
-    const n = Math.max(0, Number(value));
-    userCosts[key] = n;
-  }
+  if (value === '' || value == null || !Number.isFinite(Number(value))) delete userCosts[key];
+  else userCosts[key] = Math.max(0, Number(value));
   saveUserCosts();
   renderCR(); // live update
 }
 
-// ---- coût de revient €/m² pour une prestation ----
-function getServiceCostM2(key) {
-  // priorité aux coûts saisis
-  if (Number.isFinite(userCosts[key])) return userCosts[key];
+// ---- helpers: garantir les conteneurs même si le partial ne les a pas ----
+function ensureContainers() {
+  const view = document.getElementById('view');
+  if (!view) return;
 
-  // coût direct dans PRICING
-  const direct = PRICING?.costs?.servicesM2?.[key];
-  if (Number.isFinite(direct)) return Math.max(0, Number(direct));
+  // layout principal si pas de grille
+  let grid = view.querySelector('[data-cr-root]');
+  if (!grid) {
+    grid = document.createElement('section');
+    grid.setAttribute('data-cr-root', '1');
+    grid.className = 'max-w-6xl mx-auto p-4 grid md:grid-cols-3 gap-6';
+    view.prepend(grid);
+  }
 
-  // estimation via marge depuis PV/m² (TTC)
-  const pvService = PRICING?.servicesTTC?.[key];
-  if (!Number.isFinite(pvService)) return null;
+  // colonne gauche (prestations + tableau)
+  let left = grid.querySelector('[data-cr-left]');
+  if (!left) {
+    left = document.createElement('div');
+    left.setAttribute('data-cr-left', '1');
+    left.className = 'md:col-span-2 space-y-6';
+    grid.prepend(left);
+  }
 
-  const mHT  = PRICING?.margin?.htRate;
-  const mTTC = PRICING?.margin?.ttcRate;
-  if (Number.isFinite(mHT))  return pvService * (1 - Math.max(0, Math.min(1, mHT)));
-  if (Number.isFinite(mTTC)) return pvService * (1 - Math.max(0, Math.min(1, mTTC)));
+  // bloc prestations (liste)
+  if (!left.querySelector('#cr-services-card')) {
+    const card = document.createElement('div');
+    card.id = 'cr-services-card';
+    card.innerHTML = `
+      <h2 class="text-xl font-semibold mb-3">Coût de revient par prestation</h2>
+      <p class="text-sm text-neutral-500 mb-4">
+        Montants en €/m² et €/meuble selon les prestations cochées dans Devis.
+      </p>
+      <div id="cr-services-list" class="space-y-2"></div>`;
+    left.appendChild(card);
+  }
 
-  return null;
-}
-
-// ---- construit le tableau de saisie (et le bloc si absent) ----
-function ensureConfigCard() {
-  let card = document.getElementById('cr-config-card');
-  if (!card) {
-    const host = document.querySelector('section .md\\:col-span-2') || document.querySelector('section');
-    card = document.createElement('div');
+  // carte tableau éditable
+  if (!left.querySelector('#cr-config-card')) {
+    const card = document.createElement('div');
     card.id = 'cr-config-card';
-    card.className = 'rounded-xl border border-neutral-200 bg-white p-4 mt-6';
+    card.className = 'rounded-xl border border-neutral-200 bg-white p-4';
     card.innerHTML = `
       <div class="flex items-center justify-between gap-3 mb-3">
         <h3 class="text-base font-semibold">Mes coûts de revient (€/m²)</h3>
         <button id="btn-cr-reset-costs" type="button"
-          class="h-9 px-3 rounded-lg border border-neutral-300 hover:bg-neutral-50 text-sm">
-          Réinitialiser mes coûts
-        </button>
+          class="h-9 px-3 rounded-lg border border-neutral-300 hover:bg-neutral-50 text-sm">Réinitialiser mes coûts</button>
       </div>
       <div class="overflow-x-auto">
         <table class="w-full text-sm">
@@ -102,13 +103,66 @@ function ensureConfigCard() {
       <p class="text-xs text-neutral-500 mt-2">
         Saisie auto, enregistrée localement (navigateur). Laisse vide pour utiliser le coût par défaut / marge.
       </p>`;
-    host?.appendChild(card);
+    left.appendChild(card);
   }
-  return card;
+
+  // colonne droite (récap) — si déjà dans le partial on la laisse, sinon on la crée
+  if (!grid.querySelector('[data-cr-aside]')) {
+    const aside = document.createElement('aside');
+    aside.setAttribute('data-cr-aside', '1');
+    aside.className = 'md:col-span-1';
+    aside.innerHTML = `
+      <div class="sticky top-20 rounded-xl border border-neutral-200 bg-white p-4 space-y-3">
+        <h3 class="text-base font-semibold">Récapitulatif</h3>
+        <div class="text-sm text-neutral-500">Surface totale</div>
+        <div id="cr-surface" class="text-lg font-semibold">— m²</div>
+        <hr class="my-2">
+        <div class="text-sm text-neutral-500">Coût de revient / m²</div>
+        <div id="cr-m2" class="text-lg font-semibold">— €/m²</div>
+        <div class="text-sm text-neutral-500 mt-2">Coût de revient / meuble</div>
+        <div id="cr-meuble" class="text-lg font-semibold">— €</div>
+        <hr class="my-2">
+        <div class="text-sm text-neutral-500">Prix vendu / m²</div>
+        <div class="text-sm">HT : <span id="pv-m2-ht" class="font-medium">— €/m²</span></div>
+        <div class="text-sm">TTC : <span id="pv-m2-ttc" class="font-medium">— €/m²</span></div>
+        <div class="text-sm text-neutral-500 mt-2">Prix vendu total</div>
+        <div class="text-sm">HT : <span id="pv-total-ht" class="font-medium">— €</span></div>
+        <div class="text-sm">TTC : <span id="pv-total-ttc" class="font-medium">— €</span></div>
+        <hr class="my-2">
+        <div class="text-sm text-neutral-500">Rentabilité (sur HT)</div>
+        <div id="rentabilite" class="text-lg font-semibold">— %</div>
+        <p id="cr-hint" class="text-xs text-neutral-500 mt-2 hidden">
+          Astuce : définis <code>PRICING.costs.servicesM2</code> ou une <code>PRICING.margin</code> pour l’estimation par défaut.
+        </p>
+      </div>`;
+    grid.appendChild(aside);
+  }
 }
 
+// ---- coût de revient €/m² pour une prestation ----
+function getServiceCostM2(key) {
+  // 1) coût saisi par l'utilisateur -> prioritaire
+  if (Number.isFinite(userCosts[key])) return userCosts[key];
+
+  // 2) coût direct dans PRICING
+  const direct = PRICING?.costs?.servicesM2?.[key];
+  if (Number.isFinite(direct)) return Math.max(0, Number(direct));
+
+  // 3) estimation via marge depuis PV/m² (TTC) si dispo
+  const pvService = PRICING?.servicesTTC?.[key];
+  if (!Number.isFinite(pvService)) return null;
+
+  const mHT  = PRICING?.margin?.htRate;
+  const mTTC = PRICING?.margin?.ttcRate;
+  if (Number.isFinite(mHT))  return pvService * (1 - Math.max(0, Math.min(1, mHT)));
+  if (Number.isFinite(mTTC)) return pvService * (1 - Math.max(0, Math.min(1, mTTC)));
+
+  return null;
+}
+
+// ---- rendu du tableau de saisie ----
 function renderCostsTable() {
-  ensureConfigCard();
+  ensureContainers();
   const tbody = document.getElementById('cr-config-table');
   if (!tbody) return;
 
@@ -159,8 +213,10 @@ function renderCostsTable() {
   }
 }
 
-// ---- rendu principal CR ----
+// ---- rendu principal (prestations + recap) ----
 function renderCR() {
+  ensureContainers();
+
   const pricing = computePricing();
   if (!pricing) return;
 
@@ -248,16 +304,14 @@ function renderCR() {
 // ---- init + synchronisation temps réel ----
 let bound = false;
 export function initCR() {
-  renderCostsTable(); // construit/injecte le tableau si absent
+  ensureContainers();
+  renderCostsTable();
   renderCR();
 
   if (!bound) {
     bound = true;
-    // en temps réel depuis Devis
     window.addEventListener('devis:changed', renderCR);
     window.addEventListener('devis:reset', () => { renderCostsTable(); renderCR(); });
-
-    // sécurité: revenir sur #cr
     window.addEventListener('hashchange', () => {
       if ((location.hash || '#devis').slice(1) === 'cr') renderCR();
     });
