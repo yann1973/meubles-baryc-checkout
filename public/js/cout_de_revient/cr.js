@@ -4,6 +4,7 @@ import { PRICING } from '../devis/constants.js';
 import { computePricing } from '../devis/pricing.js';
 
 const euro = (n) => new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR' }).format(Number(n) || 0);
+const TARGET_RATE = 50; // objectif mini 50 € HT/h
 
 const ORDER = ['poncage','aerogommage','peinture1','peinture2','teinte','vernis','consommables'];
 const LABELS = {
@@ -16,36 +17,34 @@ const LABELS = {
   consommables: 'Consommables',
 };
 
-// ---- stockage des coûts saisis (€/m²) ----
-const LS_KEY = 'cr_user_costs_v1';
-let userCosts = loadUserCosts();
+// ---- stockage local ----
+const LS_COSTS = 'cr_user_costs_v1';              // { prestation: €/m² }
+const LS_HOURLY = 'cr_user_hourly_v1';            // nombre (€/h)
+const LS_FERR = 'cr_user_ferrures_v1';            // { polissage: €/pièce, remplacement: €/pièce }
 
-function loadUserCosts() {
-  try {
-    const raw = localStorage.getItem(LS_KEY);
-    if (!raw) return {};
-    const obj = JSON.parse(raw);
-    const out = {};
-    for (const k of Object.keys(obj || {})) {
-      const v = Number(obj[k]);
-      if (Number.isFinite(v) && v >= 0) out[k] = v;
-    }
-    return out;
-  } catch { return {}; }
+let userCosts = loadJSON(LS_COSTS, {});
+let hourlyRate = Number(loadJSON(LS_HOURLY, 0)) || 0;
+let ferrures = loadJSON(LS_FERR, { polissage: 0, remplacement: 0 });
+
+function loadJSON(key, fallback) {
+  try { const v = localStorage.getItem(key); return v ? JSON.parse(v) : fallback; } catch { return fallback; }
 }
-function saveUserCosts() { try { localStorage.setItem(LS_KEY, JSON.stringify(userCosts)); } catch {} }
-function setUserCost(key, value) {
-  if (!ORDER.includes(key)) return;
-  if (value === '' || value == null || !Number.isFinite(Number(value))) delete userCosts[key];
-  else userCosts[key] = Math.max(0, Number(value));
-  saveUserCosts();
-  renderAll(); // live update
+function saveJSON(key, value) {
+  try { localStorage.setItem(key, JSON.stringify(value)); } catch {}
+}
+
+// helpers
+function formatHours(t) {
+  if (!Number.isFinite(t) || t <= 0) return '0 h';
+  const h = Math.floor(t);
+  const m = Math.floor((t - h) * 60);
+  return m > 0 ? `${h} h ${m} min` : `${h} h`;
 }
 
 // ---- coût de revient €/m² pour une prestation ----
 function getServiceCostM2(key) {
   // 1) TES coûts saisis -> priorité
-  if (Number.isFinite(userCosts[key])) return userCosts[key];
+  if (Number.isFinite(userCosts[key])) return Math.max(0, Number(userCosts[key]));
 
   // 2) coût direct configuré
   const direct = PRICING?.costs?.servicesM2?.[key];
@@ -63,7 +62,7 @@ function getServiceCostM2(key) {
   return null;
 }
 
-// ---- rendu : tableau éditable ----
+// ---- rendu : tableau editable (€/m²) ----
 function renderCostsTable() {
   const tbody = document.getElementById('cr-config-table');
   if (!tbody) return;
@@ -91,7 +90,13 @@ function renderCostsTable() {
       const pv = PRICING?.servicesTTC?.[key];
       return Number.isFinite(pv) ? `~${(pv * 0.7).toFixed(2)}` : '';
     })();
-    input.addEventListener('input', () => setUserCost(key, input.value));
+    input.addEventListener('input', () => {
+      const v = input.value;
+      if (v === '' || v == null || !Number.isFinite(Number(v))) delete userCosts[key];
+      else userCosts[key] = Math.max(0, Number(v));
+      saveJSON(LS_COSTS, userCosts);
+      renderAll(); // live update
+    });
     tdInput.appendChild(input);
 
     const tdPV = document.createElement('td');
@@ -108,14 +113,54 @@ function renderCostsTable() {
     resetBtn.__bound = true;
     resetBtn.addEventListener('click', () => {
       userCosts = {};
-      saveUserCosts();
+      saveJSON(LS_COSTS, userCosts);
       renderCostsTable();
       renderAll();
     });
   }
 }
 
-// ---- rendu : liste des prestations + récap ----
+// ---- bind : MO & ferrures ----
+function bindMoFerrures() {
+  const elHr  = document.getElementById('cr-hourly-rate');
+  const elPol = document.getElementById('cr-cost-ferrures-polissage');
+  const elRem = document.getElementById('cr-cost-ferrures-remplacement');
+
+  if (elHr && !elHr.__bound) {
+    elHr.__bound = true;
+    elHr.value = hourlyRate ? String(hourlyRate) : '';
+    elHr.addEventListener('input', () => {
+      const v = Number(elHr.value);
+      hourlyRate = Number.isFinite(v) && v >= 0 ? v : 0;
+      saveJSON(LS_HOURLY, hourlyRate);
+      renderAll();
+    });
+  }
+
+  if (elPol && !elPol.__bound) {
+    elPol.__bound = true;
+    elPol.value = Number.isFinite(ferrures.polissage) && ferrures.polissage > 0 ? String(ferrures.polissage) : '';
+    elPol.addEventListener('input', () => {
+      const v = Number(elPol.value);
+      ferrures.polissage = Number.isFinite(v) && v >= 0 ? v : 0;
+      saveJSON(LS_FERR, ferrures);
+      renderAll();
+    });
+  }
+
+  if (elRem && !elRem.__bound) {
+    elRem.__bound = true;
+    elRem.value = Number.isFinite(ferrures.remplacement) && ferrures.remplacement > 0 ? String(ferrures.remplacement) : '';
+    elRem.addEventListener('input', () => {
+      const v = Number(elRem.value);
+      ferrures.remplacement = Number.isFinite(v) && v >= 0 ? v : 0;
+      saveJSON(LS_FERR, ferrures);
+      renderAll();
+    });
+  }
+}
+
+// ---- rendu : prestations + recap + temps max ----
 function renderServicesAndRecap() {
   const pricing = computePricing();
   if (!pricing) return;
@@ -126,17 +171,18 @@ function renderServicesAndRecap() {
   const pvM2HT    = surface > 0 ? totalHT  / surface : 0;
   const pvM2TTC   = surface > 0 ? totalTTC / surface : 0;
 
-  // Liste prestations
   const list = document.getElementById('cr-services-list');
   if (list) list.innerHTML = '';
-  let crM2Total = 0;
+
+  let crM2FromServices = 0;
   let anyUnknown = false;
 
   ORDER.forEach((key) => {
     const selected   = !!state?.services?.[key];
-    const costM2     = getServiceCostM2(key);           // pourrait être null
+    const costM2     = getServiceCostM2(key); // peut être null
     const effectiveM2= selected && Number.isFinite(costM2) ? costM2 : 0;
-    crM2Total       += effectiveM2;
+    crM2FromServices += effectiveM2;
+
     const costMeuble = effectiveM2 * surface;
 
     const row = document.createElement('div');
@@ -171,10 +217,19 @@ function renderServicesAndRecap() {
     list?.appendChild(row);
   });
 
-  // Récap latéral
-  const crM2     = crM2Total;
-  const crMeuble = crM2 * surface;
+  // --- ferrures (quantités depuis Devis) ---
+  const qRem = Number(state?.pieceCounts?.ferrures_change || 0);
+  const qPol = Number(state?.pieceCounts?.ferrures_polissage || 0);
+  const cRem = Number(ferrures.remplacement || 0);
+  const cPol = Number(ferrures.polissage || 0);
+  const ferruresTotal = (qRem * cRem) + (qPol * cPol);
 
+  // CR total fixe (hors temps) :
+  //  - part m² (prestations cochées) + part ferrures
+  const crM2_includingFerr = surface > 0 ? (crM2FromServices * surface + ferruresTotal) / surface : crM2FromServices;
+  const crMeuble = (crM2FromServices * surface) + ferruresTotal;
+
+  // Récap latéral
   const elSurface   = document.getElementById('cr-surface');
   const elCrM2      = document.getElementById('cr-m2');
   const elCrMeuble  = document.getElementById('cr-meuble');
@@ -184,24 +239,33 @@ function renderServicesAndRecap() {
   const elPvTotalTTC= document.getElementById('pv-total-ttc');
   const elRent      = document.getElementById('rentabilite');
   const elHint      = document.getElementById('cr-hint');
+  const elTmax      = document.getElementById('cr-tmax');
 
   if (elSurface)    elSurface.textContent   = surface ? `${surface.toFixed(2)} m²` : '— m²';
-  if (elCrM2)       elCrM2.textContent      = `${euro(crM2)} /m²`;
+  if (elCrM2)       elCrM2.textContent      = `${euro(crM2_includingFerr)} /m²`;
   if (elCrMeuble)   elCrMeuble.textContent  = euro(crMeuble);
   if (elPvM2HT)     elPvM2HT.textContent    = surface ? `${euro(pvM2HT)} /m²`  : '— €/m²';
   if (elPvM2TTC)    elPvM2TTC.textContent   = surface ? `${euro(pvM2TTC)} /m²` : '— €/m²';
   if (elPvTotalHT)  elPvTotalHT.textContent = euro(totalHT);
   if (elPvTotalTTC) elPvTotalTTC.textContent= euro(totalTTC);
 
+  // Rentabilité % (sur HT) — hors temps (car inconnu)
   const rent = totalHT > 0 ? ((totalHT - crMeuble) / totalHT) * 100 : NaN;
   if (elRent) elRent.textContent = Number.isFinite(rent) ? `${rent.toFixed(1)} %` : '— %';
 
-  if (elHint) elHint.classList.toggle('hidden', !anyUnknown);
+  // Temps max pour >= 50 €/h (HT), avec coût horaire saisi
+  // t_max = (PV_HT_total − CR_fixe) / (TARGET_RATE + hourlyRate)
+  const denom = TARGET_RATE + (Number(hourlyRate) || 0);
+  const tmax = denom > 0 ? (totalHT - crMeuble) / denom : 0;
+  if (elTmax) elTmax.textContent = formatHours(tmax);
+
+  if (elHint) elHint.classList.toggle('hidden', true /* on masque par défaut */);
 }
 
-// ---- orchestrateur ----
+// orchestrateur
 function renderAll() {
   renderCostsTable();
+  bindMoFerrures();
   renderServicesAndRecap();
 }
 
@@ -212,11 +276,11 @@ export function initCR() {
 
   if (!bound) {
     bound = true;
-    // Quand le devis change (inputs, checkbox, transport…), on met à jour
+    // Devis -> CR en temps réel
     window.addEventListener('devis:changed', renderAll);
     window.addEventListener('devis:reset', renderAll);
 
-    // Sécurité : re-render quand on revient sur #cr
+    // sécurité : re-render si on revient sur #cr
     window.addEventListener('hashchange', () => {
       if ((location.hash || '#devis').slice(1) === 'cr') renderAll();
     });
