@@ -53,7 +53,7 @@ export async function loadView(tab){
       // Imports dynamiques (défensifs)
       let state, computePricing, renderTotals, initServices, renderRecapServices,
           initDimensions, initCart, initMapsBindings, loadGoogleMaps, initStripe,
-          initCR, computeDistance;
+          computeCR, initCR, computeDistance;
 
       try { ({ state } = await import('/js/state.js')); } catch(e){ console.warn('state.js', e); }
       try { ({ computePricing } = await import('/js/devis/pricing.js')); } catch(e){ console.warn('pricing.js', e); }
@@ -63,7 +63,7 @@ export async function loadView(tab){
       try { ({ initCart } = await import('/js/devis/cart.js')); } catch(e){ console.warn('cart.js', e); }
       try { ({ initMapsBindings, loadGoogleMaps } = await import('/js/transport/maps.js')); } catch(e){ console.warn('maps.js', e); }
       try { ({ default: initStripe } = await import('/js/devis/stripe.js')); } catch(e){ console.warn('stripe.js', e); }
-      try { ({ computePricing, initCR } = await import('/js/cout_de_revient/cr.js')); } catch(e){ console.warn('cr.js', e); }
+      try { ({ computeCR, initCR } = await import('/js/cout_de_revient/cr.js')); } catch(e){ console.warn('cr.js', e); }
       try { ({ computeDistance } = await import('/js/transport/distance.js')); } catch(e){ console.warn('distance.js', e); }
 
       // Fallbacks sûrs
@@ -83,7 +83,7 @@ export async function loadView(tab){
         initMapsBindings: initMapsBindings || (()=>{}),
         loadGoogleMaps: loadGoogleMaps || (()=>{}),
         initStripe: initStripe || (()=>{}),
-        computePricing: computePricing || (()=>{}),
+        computeCR: computeCR || (()=>{}),
         initCR: initCR || (()=>{}),
         computeDistance: computeDistance || (()=>{}),
       };
@@ -122,7 +122,7 @@ export async function loadView(tab){
         try { safe.renderRecapServices(safe.state); } catch {}
         // Idempotent : certains modules rebind proprement
         try { safe.initCart(()=>{}); } catch {}
-        try { safe.computePricing(p, safe.state); } catch {}
+        try { safe.computeCR(p, safe.state); } catch {}
       }
 
       // Inits
@@ -156,14 +156,14 @@ export async function loadView(tab){
   if (tab === 'cr') {
     try {
       view.innerHTML = await getPartial('cr');
-      const [{ initCR, computePricing }, { state }] = await Promise.all([
+      const [{ initCR, computeCR }, { computePricing }, { state }] = await Promise.all([
         import('/js/cout_de_revient/cr.js'),
         import('/js/devis/pricing.js'),
         import('/js/state.js'),
       ]);
       const recalc = ()=>{
         const p = computePricing();
-        computePricing(p, state);
+        computeCR(p, state);
       };
       initCR(recalc);
       recalc();
