@@ -1,15 +1,17 @@
 <section class="max-w-6xl mx-auto p-4 grid md:grid-cols-3 gap-6">
-  <!-- Liste des prestations (coûts utilisés) -->
-  <div class="md:col-span-2">
-    <h2 class="text-xl font-semibold mb-3">Coût de revient par prestation</h2>
-    <p class="text-sm text-neutral-500 mb-4">
-      Montants en €/m² et €/meuble selon les prestations cochées dans Devis. Les coûts saisis ci-dessous priment.
-    </p>
+  <!-- Colonne gauche : Prestations + Tableau editable + MO & ferrures -->
+  <div class="md:col-span-2 space-y-6">
+    <!-- Carte : coûts par prestation (affichage) -->
+    <div class="rounded-xl border border-neutral-200 bg-white p-4">
+      <h2 class="text-xl font-semibold mb-2">Coût de revient par prestation</h2>
+      <p class="text-sm text-neutral-500 mb-4">
+        Montants en €/m² et €/meuble selon les prestations cochées dans Devis.
+      </p>
+      <div id="cr-services-list" class="space-y-2"><!-- rempli par JS --></div>
+    </div>
 
-    <div id="cr-services-list" class="space-y-2"><!-- rendu par JS --></div>
-
-    <!-- Tableau de saisie de tes coûts -->
-    <div id="cr-config-card" class="rounded-xl border border-neutral-200 bg-white p-4 mt-6">
+    <!-- Carte : tableau éditable de TES coûts par prestation (€/m²) -->
+    <div class="rounded-xl border border-neutral-200 bg-white p-4">
       <div class="flex items-center justify-between gap-3 mb-3">
         <h3 class="text-base font-semibold">Mes coûts de revient (€/m²)</h3>
         <button id="btn-cr-reset-costs" type="button"
@@ -27,17 +29,49 @@
               <th class="py-2">PV €/m² (TTC)</th>
             </tr>
           </thead>
-          <tbody id="cr-config-table"><!-- rendu par JS --></tbody>
+          <tbody id="cr-config-table"><!-- rempli par JS --></tbody>
         </table>
       </div>
 
       <p class="text-xs text-neutral-500 mt-2">
-        Saisie auto, enregistrée localement (navigateur). Laisse vide pour utiliser le coût par défaut / marge.
+        Saisie enregistrée localement (navigateur). Laisse vide pour utiliser le coût par défaut / marge.
+      </p>
+    </div>
+
+    <!-- Carte : main d’œuvre & ferrures -->
+    <div class="rounded-xl border border-neutral-200 bg-white p-4">
+      <h3 class="text-base font-semibold mb-3">Main d’œuvre & ferrures</h3>
+
+      <div class="grid sm:grid-cols-3 gap-4">
+        <!-- coût horaire -->
+        <label class="block">
+          <span class="text-sm text-neutral-600">Coût horaire MO (€/h)</span>
+          <input id="cr-hourly-rate" type="number" min="0" step="0.01" inputmode="decimal"
+                 class="mt-1 w-full h-10 px-3 rounded-lg border border-neutral-300 bg-white" placeholder="ex. 25">
+        </label>
+
+        <!-- ferrures polissage -->
+        <label class="block">
+          <span class="text-sm text-neutral-600">Ferrures — polissage (€/pièce)</span>
+          <input id="cr-cost-ferrures-polissage" type="number" min="0" step="0.01" inputmode="decimal"
+                 class="mt-1 w-full h-10 px-3 rounded-lg border border-neutral-300 bg-white" placeholder="ex. 5">
+        </label>
+
+        <!-- ferrures remplacement -->
+        <label class="block">
+          <span class="text-sm text-neutral-600">Ferrures — remplacement (€/pièce)</span>
+          <input id="cr-cost-ferrures-remplacement" type="number" min="0" step="0.01" inputmode="decimal"
+                 class="mt-1 w-full h-10 px-3 rounded-lg border border-neutral-300 bg-white" placeholder="ex. 8">
+        </label>
+      </div>
+
+      <p class="text-xs text-neutral-500 mt-2">
+        Ces coûts s’ajoutent au CR fixe (hors temps). Le temps maximum est calculé pour viser au moins <strong>50 € HT/h</strong>.
       </p>
     </div>
   </div>
 
-  <!-- Récap latéral -->
+  <!-- Colonne droite : Récap -->
   <aside class="md:col-span-1">
     <div class="sticky top-20 rounded-xl border border-neutral-200 bg-white p-4 space-y-3">
       <h3 class="text-base font-semibold">Récapitulatif</h3>
@@ -68,8 +102,11 @@
       <div class="text-sm text-neutral-500">Rentabilité (sur HT)</div>
       <div id="rentabilite" class="text-lg font-semibold">— %</div>
 
+      <div class="text-sm text-neutral-500">Temps max pour ≥ 50 € HT/h</div>
+      <div id="cr-tmax" class="text-lg font-semibold">— h</div>
+
       <p id="cr-hint" class="text-xs text-neutral-500 mt-2 hidden">
-        Astuce : définis <code>PRICING.costs.servicesM2</code> ou une <code>PRICING.margin</code> pour l’estimation par défaut.
+        Définis tes coûts (€/m², ferrures, MO) pour un résultat précis.
       </p>
     </div>
   </aside>
