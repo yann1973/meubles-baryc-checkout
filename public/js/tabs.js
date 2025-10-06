@@ -114,6 +114,8 @@ if (tab === 'devis') {
   }
 }
 
+window.dispatchEvent(new CustomEvent('devis:changed', { detail: { reason: 'reset' } }));
+
       // AUCUN scroll automatique par défaut
       if (allowScroll && tab === 'devis') {
         const anchor = document.querySelector('#devis');
