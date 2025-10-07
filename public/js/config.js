@@ -2,6 +2,8 @@
 // Config "admin" côté front : prestations dynamiques, PV €/m², coûts €/m²,
 // adresse de référence & barème km. Stockée en localStorage, appliquée à PRICING.
 
+export * from '/js/config/index.js';
+
 import { PRICING } from '/js/devis/constants.js';
 
 export const LS_KEY = 'admin_config_v2';

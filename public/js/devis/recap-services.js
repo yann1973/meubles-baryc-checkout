@@ -1,4 +1,6 @@
 // public/js/devis/recap-services.js
+export { renderRecapServices } from '/js/devis/recap/services.js';
+
 export function renderRecapServices(state){
   const list = document.getElementById('recapServices');
   if(!list) return;
