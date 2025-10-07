@@ -1,43 +1,5 @@
-console.log("[DEPLOY TEST] " + new Date().toISOString());
-
 // public/js/tabs.js
 import { loadView } from '/js/loader.js';
-
-// helper d'import tolérant + chemins relatifs à ce fichier
-async function importModule(specFromHere) {
-  const abs = new URL(specFromHere, import.meta.url).href;
-  const clean = abs.split('?')[0];
-  const withBust = `${clean}?ts=${Date.now()}`;
-
-  const isJS = (ct) => {
-    if (!ct) return true;
-    const l = ct.toLowerCase();
-    if (l.includes('javascript') || l.includes('text/plain')) return true;
-    if (l.includes('html')) return false;
-    return true;
-  };
-
-  async function tryOne(url, label) {
-    try {
-      const h = await fetch(url, { method: 'HEAD', cache: 'no-store' });
-      if (h.ok && isJS(h.headers.get('content-type'))) {
-        console.debug('[tabs] import', label, url, h.status, h.headers.get('content-type'));
-        return await import(/* @vite-ignore */ url);
-      }
-      console.warn('[tabs] HEAD non OK/CT:', label, url, h.status, h.headers.get('content-type'));
-    } catch (e) {
-      console.warn('[tabs] HEAD échec', label, url, e);
-    }
-    return null;
-  }
-
-  return (
-    (await tryOne(abs, 'as-is')) ||
-    (await tryOne(clean, 'no-query')) ||
-    (await tryOne(withBust, 'cache-bust')) ||
-    (await import(/* @vite-ignore */ abs)) // dernier essai visible en console si ça casse
-  );
-}
 
 export function initTabs() {
   const tabDevis = document.getElementById('tabDevis');
@@ -45,13 +7,11 @@ export function initTabs() {
   const tabCH    = document.getElementById('tabCH');
   const view     = document.getElementById('view');
 
-  if (!view) console.warn('[tabs] #view introuvable');
-
-  // chemins RELATIFS à tabs.js
+  // Mapping des onglets → modules (chemins RELATIFS à ce fichier)
   const TABS = {
-    devis: { moduleFromHere: './devis/ui.js',           inits: ['initDevis', 'default'] },
-    cr:    { moduleFromHere: './cout_de_revient/cr.js', inits: ['initCR', 'default'] },
-    ch:    { moduleFromHere: './cout_horaire/ch.js',    inits: ['initCH', 'default'] },
+    devis: { moduleFromHere: './devis/ui/index.js',     initNames: ['initDevis', 'default'] },
+    cr:    { moduleFromHere: './cout_de_revient/index.js', initNames: ['initCR', 'default'] },
+    ch:    { moduleFromHere: './cout_horaire/ch.js',    initNames: ['initCH', 'default'] },
   };
   const VALID_TABS = new Set(Object.keys(TABS));
 
@@ -63,7 +23,7 @@ export function initTabs() {
     { el: tabDevis, key: 'devis' },
     { el: tabCR,    key: 'cr' },
     { el: tabCH,    key: 'ch' },
-  ].filter(Boolean);
+  ].filter(t => t.el);
 
   const setActive = (tab) => {
     allTabs.forEach(({ el, key }) => {
@@ -75,23 +35,7 @@ export function initTabs() {
 
   const pickInit = (mod, names) => {
     for (const n of names) if (typeof mod?.[n] === 'function') return mod[n];
-    return null;
-  };
-
-  const clearStoragesIfAsked = () => {
-    try {
-      // supprime les clés connues + fuzzy match
-      const KNOWN = ['devis_cart','panier','cart','DEVIS_CART','baryc_cart','checkout_items','devis-state','mb_cart'];
-      KNOWN.forEach(k => { localStorage.removeItem(k); sessionStorage.removeItem(k); });
-      for (let i = localStorage.length - 1; i >= 0; i--) {
-        const k = localStorage.key(i);
-        if (/(devis|cart|panier|baryc|checkout)/i.test(k)) localStorage.removeItem(k);
-      }
-      for (let i = sessionStorage.length - 1; i >= 0; i--) {
-        const k = sessionStorage.key(i);
-        if (/(devis|cart|panier|baryc|checkout)/i.test(k)) sessionStorage.removeItem(k);
-      }
-    } catch {}
+    return () => {};
   };
 
   const open = async (tab, { allowScroll = false } = {}) => {
@@ -100,56 +44,50 @@ export function initTabs() {
 
     loading = true;
     const myReq = ++reqId;
-    console.debug('[tabs] open:', tab);
 
     try {
       if (view) view.innerHTML = '';
 
-      // --- détecte la demande de reset (query OU flag) ---
+      // detecte la demande de reset (?reset=1 ou flag localStorage)
       let resetAsked = false;
-      let params;
+      let params = null;
       if (tab === 'devis') {
         params = new URLSearchParams(location.search);
         const flag = localStorage.getItem('force_reset') === '1';
         resetAsked = (params.get('reset') === '1') || flag;
-        if (resetAsked) {
-          console.debug('[tabs] pre-clear storages before loadView');
-          clearStoragesIfAsked();     // ← vide les stockages AVANT l’injection de la vue
-        }
       }
 
-      if (typeof loadView !== 'function') throw new Error('loader.js: loadView introuvable');
+      // injecte la vue HTML
       await loadView(tab);
-
-      if (myReq !== reqId) return; // anti-course
+      if (myReq !== reqId) return;
 
       setActive(tab);
 
+      // maj hash (sans empiler l’historique)
       const targetHash = '#' + tab;
       if (location.hash !== targetHash) history.replaceState(null, '', targetHash);
 
-      const { moduleFromHere, inits } = TABS[tab];
-      const mod  = await importModule(moduleFromHere);
-      const init = pickInit(mod, inits) || (()=>{});
+      // charge et initialise le module de l’onglet
+      const { moduleFromHere, initNames } = TABS[tab];
+      const mod  = await import(moduleFromHere);
+      const init = pickInit(mod, initNames);
       init();
 
-      // --- applique le reset après init si demandé ---
+      // reset demandé → appelle resetDevis() puis nettoie l’URL/flag
       if (tab === 'devis' && resetAsked) {
-        console.debug('[tabs] resetDevis() requested');
-        try { typeof mod.resetDevis === 'function' && mod.resetDevis(); } catch(e) { console.warn('[tabs] reset error:', e); }
-        // nettoie URL + flag pour ne pas re-reset
-        params.delete('reset');
-        const newUrl = location.pathname + (params.toString() ? '?' + params : '') + location.hash;
-        history.replaceState(null, '', newUrl);
+        try { typeof mod.resetDevis === 'function' && mod.resetDevis(); } catch {}
+        if (params) {
+          params.delete('reset');
+          const newUrl = location.pathname + (params.toString() ? `?${params}` : '') + location.hash;
+          history.replaceState(null, '', newUrl);
+        }
         try { localStorage.removeItem('force_reset'); } catch {}
-        // notifie les éventuels écouteurs
-        window.dispatchEvent(new CustomEvent('devis:changed', { detail: { reason: 'reset' } }));
+        try { window.dispatchEvent(new CustomEvent('devis:changed', { detail: { reason: 'reset' } })); } catch {}
       }
 
-      // pas de scroll auto (sauf navigation par hash si allowScroll)
+      // pas de scroll auto (sauf navigation via hash)
       if (allowScroll && tab === 'devis') {
-        const anchor = document.querySelector('#devis');
-        anchor?.scrollIntoView({ behavior: 'smooth', block: 'start', inline: 'nearest' });
+        document.querySelector('#devis')?.scrollIntoView({ behavior: 'smooth', block: 'start', inline: 'nearest' });
       }
 
       currentTab = tab;
@@ -172,7 +110,7 @@ export function initTabs() {
   tabCR?.addEventListener('click',    () => open('cr',    { allowScroll: false }));
   tabCH?.addEventListener('click',    () => open('ch',    { allowScroll: false }));
 
-  // navigation par hash: autorise le scroll (si l'utilisateur tape /#devis)
+  // hashchange: autorise le scroll (si l'utilisateur tape /#devis)
   window.addEventListener('hashchange', () => {
     const next = (location.hash || '#devis').slice(1);
     open(VALID_TABS.has(next) ? next : 'devis', { allowScroll: true });

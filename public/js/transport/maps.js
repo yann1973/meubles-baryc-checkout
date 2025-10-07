@@ -7,12 +7,12 @@ let mapsLoaded = false;
 let loading = false;
 let recomputeCb = null;
 
-// --- origine "société" (modifiable depuis l'onglet CR via applyConfig)
+// --- Origine "société" (modifiable depuis l'onglet CR via applyConfig)
 function getCompanyOrigin() {
   return PRICING?.transport?.baseAddress || '';
 }
 
-// --- clé Google depuis /env.js (window.ENV.*)
+// --- Clé Google injectée par /env.js (window.ENV)
 function getMapsKey() {
   return (window.ENV && window.ENV.GOOGLE_MAPS_API_KEY) || '';
 }
@@ -121,22 +121,20 @@ export function initMapsBindings(onChange) {
   const deliveryDifferent   = document.getElementById('deliveryDifferent');
   const deliveryWrap        = document.getElementById('deliveryAddressWrap');
 
-  // --- Synchro avec l'ADMIN : adresse de référence & barème km
-  // Quand l'admin modifie l'adresse de référence dans l'onglet CR, on recalcule ici.
+  // --- Synchro Admin: adresse de référence / barème km
   window.addEventListener('admin:transport-updated', () => {
-    // si l'utilisateur n'a pas rempli "pickup", on utilise l'origine société par défaut
+    // si pickup est vide, on le pré-remplit avec l'origine société
     const pickupEl = document.getElementById('transportAddressPickup');
     const origin = getCompanyOrigin();
     if (pickupEl && !pickupEl.value.trim() && origin) {
       pickupEl.value = origin;
     }
-    // si on est en mode "baryc" et non-manuel, relance un calcul
+    // si mode baryc + pas manuel → calcule; sinon juste recompute()
     const isManual = !!manualToggle?.checked;
     const isBaryc  = (modeSel?.value || state?.transport?.mode) === 'baryc';
     if (isBaryc && !isManual) {
       computeDistance(recomputeCb);
     } else {
-      // pas de calcul (manuel ou client), mais on met à jour le prix via recompute()
       recomputeCb && recomputeCb();
     }
   }, { passive: true });
@@ -149,7 +147,6 @@ export function initMapsBindings(onChange) {
       if (manualToggle.checked) {
         distanceManual.classList.remove('hidden');
         distanceAutoBlock.classList.add('hidden');
-        // passe en mode baryc si on force une distance
         state.transport.mode = 'baryc';
         const n = Number(distanceManual.value || 0);
         state.transport.distanceKm = Number.isFinite(n) ? n : 0;
@@ -203,7 +200,7 @@ export function initMapsBindings(onChange) {
           refreshDistanceUI();
           recomputeCb && recomputeCb();
         } else {
-          // pré-remplit l'origine par défaut si pickup vide
+          // pré-remplit l'origine si besoin
           const pickupEl = document.getElementById('transportAddressPickup');
           if (pickupEl && !pickupEl.value.trim()) {
             const origin = getCompanyOrigin();
@@ -245,7 +242,6 @@ export function initMapsBindings(onChange) {
   }
 
   // --- Premier état
-  // si mode baryc + pas manuel → calcule ; sinon rafraîchit juste l'affichage
   const isManual = !!manualToggle?.checked;
   const isBaryc  = (modeSel?.value || state?.transport?.mode) === 'baryc';
   if (isBaryc && !isManual) {

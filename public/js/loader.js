@@ -1,27 +1,10 @@
 // public/js/loader.js
 
-// --- util: import tolérant du calculateur (computePricing en priorité) ---
-let _computeFnPromise = null;
-async function getComputeFn() {
-  if (_computeFnPromise) return _computeFnPromise;
-  _computeFnPromise = import('/js/devis/pricing.js')
-    .then((mod) => {
-      const fn =
-        (typeof mod.computePricing === 'function' && mod.computePricing) ||
-        (typeof mod.computeCR === 'function' && mod.computeCR) ||
-        null;
-      if (!fn) console.warn('[loader] Aucun computePricing/computeCR exporté par /js/devis/pricing.js');
-      return fn;
-    })
-    .catch((e) => {
-      console.warn('[loader] import pricing.js échoué:', e);
-      return null;
-    });
-  return _computeFnPromise;
-}
-
-// --- cache des partials ---
+// ------------------------------
+// Cache des partials
+// ------------------------------
 const HTML_CACHE = new Map();
+
 async function getPartial(name) {
   if (HTML_CACHE.has(name)) return HTML_CACHE.get(name);
   const url = `/partials/${encodeURIComponent(name)}.html`;
@@ -40,7 +23,28 @@ function showErr(container, title, err) {
     </div>`;
 }
 
-// --- API principale ---
+// ------------------------------
+// Appliquer la config Admin (PV/CR/transport) avant de construire l'UI
+// Essaie d’abord /js/config/index.js, sinon retombe sur /js/config.js
+// ------------------------------
+async function applyAdminConfig() {
+  try {
+    const { loadConfig, applyConfig } = await import('/js/config/index.js');
+    applyConfig(loadConfig());
+    return;
+  } catch {}
+  try {
+    // compat si tu n'as pas encore mis en place /config/index.js
+    const { loadConfig, applyConfig } = await import('/js/config.js');
+    applyConfig(loadConfig());
+  } catch (e) {
+    console.warn('[loader] Impossible d’appliquer la config admin:', e);
+  }
+}
+
+// ------------------------------
+// API principale
+// ------------------------------
 export async function loadView(tab) {
   const view = document.getElementById('view');
   if (!view) throw new Error('#view introuvable');
@@ -73,105 +77,50 @@ export async function loadView(tab) {
       main.innerHTML = formHTML;
       side.innerHTML = sideHTML;
 
+      // applique la config admin (prestations/PV/transport) avant de construire l’UI
+      await applyAdminConfig();
+
       // année
       const y = document.getElementById('year');
       if (y) y.textContent = new Date().getFullYear();
 
-      // imports dynamiques (tous optionnels)
-      let state, renderTotals, initServices, renderRecapServices,
-          initDimensions, initCart, initMapsBindings, loadGoogleMaps,
-          initStripe, computeDistance;
+      // --- Nouvel orchestrateur Devis
+      const { initDevis } = await import('/js/devis/ui/index.js');
+      // --- Recompute central (à passer en callback aux modules qui en ont besoin)
+      const { recompute } = await import('/js/devis/ui/recompute.js');
 
-      try { ({ state } = await import('/js/state.js')); } catch (e) { console.warn('[loader] state.js', e); }
-      try { ({ renderTotals } = await import('/js/devis/recap.js')); } catch (e) { console.warn('[loader] recap.js', e); }
-      try { ({ initServices, renderRecapServices } = await import('/js/devis/services.js')); } catch (e) { console.warn('[loader] services.js', e); }
-      try { ({ initDimensions } = await import('/js/devis/dimensions.js')); } catch (e) { console.warn('[loader] dimensions.js', e); }
-      try { ({ initCart } = await import('/js/devis/cart.js')); } catch (e) { console.warn('[loader] cart.js', e); }
-      try { ({ initMapsBindings, loadGoogleMaps } = await import('/js/transport/maps.js')); } catch (e) { console.warn('[loader] maps.js', e); }
-      try { ({ default: initStripe } = await import('/js/devis/stripe.js')); } catch (e) { console.warn('[loader] stripe.js', e); }
-      try { ({ computeDistance } = await import('/js/transport/distance.js')); } catch (e) { console.warn('[loader] distance.js', e); }
+      // Initialise l'UI Devis (cases prestations dynamiques + 1er calcul)
+      (initDevis || (() => {}))();
 
-      // fallbacks sûrs
-      const safe = {
-        state: state || { transport:{ mode:'client', pickKm:0, dropKm:0, distanceKm:0 }, cart:[], services:{}, pieceCounts:{} },
-        renderTotals: renderTotals || (() => {}),
-        initServices: initServices || (() => {}),
-        renderRecapServices: renderRecapServices || (() => {}),
-        initDimensions: initDimensions || (() => {}),
-        initCart: initCart || (() => {}),
-        initMapsBindings: initMapsBindings || (() => {}),
-        loadGoogleMaps: loadGoogleMaps || (() => {}),
-        initStripe: initStripe || (() => {}),
-        computeDistance: computeDistance || (() => {}),
-      };
+      // --- Modules "legacy" utiles : dimensions/panier/Maps/Stripe
+      // (Tolérants : s'ils n'existent pas chez toi, on log juste un warn)
+      try {
+        const { initDimensions } = await import('/js/devis/dimensions.js');
+        try { initDimensions(recompute); } catch { initDimensions && initDimensions(); }
+      } catch (e) { console.warn('[loader] dimensions.js', e); }
 
-      // recalc + diffusion d'événement global (pour CR)
-      async function rerender() {
-        try {
-          const compute = await getComputeFn();
-          const pricing = typeof compute === 'function' ? compute() : null;
+      try {
+        const { initCart } = await import('/js/devis/cart.js');
+        try { initCart(() => recompute()); } catch { initCart && initCart(); }
+      } catch (e) { console.warn('[loader] cart.js', e); }
 
-          // rendu recap devis
-          try { safe.renderTotals(pricing || {
-            totals:{ ht:0, tva:0, ttc:0 }, totalSurface:0,
-            goods:{ ht:0, tva:0, ttc:0 }, transport:{ ttc:0, discount:0, promoRate:0, raw:0, surcharge:0 },
-          }); } catch {}
+      try {
+        const { initMapsBindings, loadGoogleMaps } = await import('/js/transport/maps.js');
+        try { initMapsBindings(recompute); } catch { initMapsBindings && initMapsBindings(); }
+        // Charge Google Maps en idle
+        if ('requestIdleCallback' in window) requestIdleCallback(() => loadGoogleMaps?.(), { timeout: 2000 });
+        else setTimeout(() => loadGoogleMaps?.(), 800);
+      } catch (e) { console.warn('[loader] maps.js', e); }
 
-          // recap services basé sur le state
-          try { safe.renderRecapServices(safe.state); } catch {}
+      try {
+        const { default: initStripe } = await import('/js/devis/stripe.js');
+        initStripe && initStripe();
+      } catch (e) { console.warn('[loader] stripe.js', e); }
 
-          // notifier les autres onglets (CR)
-          try { window.dispatchEvent(new CustomEvent('devis:changed', { detail: { pricing } })); } catch {}
-        } catch (e) {
-          console.debug('[loader] rerender ignoré:', e?.message || e);
-        }
-      }
+      // Premier rendu / recalcul de sécurité
+      try { recompute(); } catch {}
 
-      // Bind transport (copie adresse client -> pickup / gestion livraison diff.)
-      const sameAsClient      = document.getElementById('sameAsClient');
-      const deliveryDifferent = document.getElementById('deliveryDifferent');
-      const clientAddr        = document.getElementById('clientAddressMain');
-      const pickup            = document.getElementById('transportAddressPickup');
-      const deliveryWrap      = document.getElementById('deliveryAddressWrap');
-
-      sameAsClient?.addEventListener('change', () => {
-        if (sameAsClient.checked && pickup && clientAddr) {
-          pickup.value = clientAddr.value;
-          try { safe.computeDistance(); } catch {}
-          rerender();
-        }
-      });
-
-      deliveryDifferent?.addEventListener('change', () => {
-        if (deliveryDifferent.checked) {
-          deliveryWrap?.classList.remove('hidden');
-        } else {
-          const d = document.getElementById('transportAddressDelivery');
-          if (d) d.value = '';
-          if (safe.state.transport) safe.state.transport.dropKm = 0;
-          try { safe.computeDistance(); } catch {}
-          deliveryWrap?.classList.add('hidden');
-        }
-        rerender();
-      });
-
-      // Inits (tolérants : avec ou sans callback)
-      try { safe.initDimensions(rerender); } catch { try { safe.initDimensions(); } catch {} }
-      try { safe.initServices(rerender); }   catch { try { safe.initServices(); }   catch {} }
-      try { safe.initCart(() => rerender()); } catch { try { safe.initCart(); } catch {} }
-      try { safe.initMapsBindings(rerender); } catch { try { safe.initMapsBindings(); } catch {} }
-
-      // Charger Google Maps en idle
-      if ('requestIdleCallback' in window) requestIdleCallback(() => safe.loadGoogleMaps(), { timeout: 2000 });
-      else setTimeout(() => safe.loadGoogleMaps(), 800);
-
-      // Stripe si dispo
-      try { safe.initStripe(); } catch {}
-
-      // Premier rendu
-      await rerender();
-
-      // Preload d'autres partials
+      // Pré-charger d'autres partials
       const pre = () => ['cr','ch'].forEach(n => getPartial(n).catch(() => {}));
       if ('requestIdleCallback' in window) requestIdleCallback(pre, { timeout: 1500 });
       else setTimeout(pre, 700);
@@ -189,18 +138,13 @@ export async function loadView(tab) {
   if (tab === 'cr') {
     try {
       view.innerHTML = await getPartial('cr');
-      const mod = await import('/js/cout_de_revient/cr.js');
 
-      // notre module CR gère computePricing en interne via ses imports
-      const init = mod.initCR || mod.default || (() => {});
-      init();
+      // applique la config (au cas où l'utilisateur arrive directement sur /#cr)
+      await applyAdminConfig();
 
-      // sécurité : petit recalc global pour initialiser les chiffres
-      try {
-        const compute = await getComputeFn();
-        const pricing = typeof compute === 'function' ? compute() : null;
-        try { window.dispatchEvent(new CustomEvent('devis:changed', { detail: { pricing } })); } catch {}
-      } catch {}
+      // Nouvel orchestrateur CR (admin + récap)
+      const { initCR } = await import('/js/cout_de_revient/index.js');
+      (initCR || (() => {}))();
     } catch (e) {
       console.error(e);
       showErr(view, 'Erreur lors du chargement de “Coût de revient”', e);
