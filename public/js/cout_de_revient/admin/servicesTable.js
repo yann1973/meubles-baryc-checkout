@@ -15,16 +15,22 @@ export function renderServicesAdmin(){
   (cfg.services || []).forEach((row, idx) => {
     const tr = document.createElement('tr');
 
+    // Libellé
     const tdLabel = document.createElement('td'); tdLabel.className='py-2 pr-3';
     const inLabel = document.createElement('input'); inLabel.type='text';
     inLabel.className='w-56 h-9 px-2 rounded-md border border-neutral-300 bg-white';
     inLabel.value=row.label || row.key;
-    inLabel.addEventListener('input', ()=> updateConfig(c => { c.services[idx].label = inLabel.value || row.key; }));
+    inLabel.addEventListener('input', ()=>{
+      updateConfig(c => { c.services[idx].label = inLabel.value || row.key; });
+      // rien d’autre à faire : applyConfig émet l’event -> Devis reconstruit la liste
+    });
     tdLabel.appendChild(inLabel);
 
+    // Key (lecture seule)
     const tdKey = document.createElement('td'); tdKey.className='py-2 pr-3 text-neutral-500';
     tdKey.textContent = row.key;
 
+    // PV TTC /m²
     const tdPV = document.createElement('td'); tdPV.className='py-2 pr-3';
     const inPV = document.createElement('input'); inPV.type='number'; inPV.min='0'; inPV.step='0.01'; inPV.inputMode='decimal';
     inPV.className='w-28 h-9 px-2 rounded-md border border-neutral-300 bg-white';
@@ -32,10 +38,11 @@ export function renderServicesAdmin(){
     inPV.addEventListener('input', ()=>{
       const v = Number(inPV.value);
       updateConfig(c => { c.services[idx].pvTTC = Number.isFinite(v)&&v>=0 ? v : 0; });
-      renderAllNumbers();
+      renderAllNumbers(); // met à jour "Mes coûts de revient"
     });
     tdPV.appendChild(inPV);
 
+    // CR €/m² (ton coût interne)
     const tdCR = document.createElement('td'); tdCR.className='py-2 pr-3';
     const inCR = document.createElement('input'); inCR.type='number'; inCR.min='0'; inCR.step='0.01'; inCR.inputMode='decimal';
     inCR.className='w-28 h-9 px-2 rounded-md border border-neutral-300 bg-white';
@@ -48,19 +55,25 @@ export function renderServicesAdmin(){
         if (!Number.isFinite(v)) delete c.costsM2[row.key];
         else c.costsM2[row.key] = Math.max(0, v);
       });
-      renderAllNumbers();
+      renderAllNumbers(); // idem
     });
     tdCR.appendChild(inCR);
 
+    // Action : supprimer
     const tdAct = document.createElement('td'); tdAct.className='py-2';
     const del = document.createElement('button'); del.type='button';
     del.className='h-8 px-3 rounded-md border border-rose-300 text-rose-700 hover:bg-rose-50';
     del.textContent='Supprimer';
     del.addEventListener('click', ()=>{
       if (!confirm(`Supprimer « ${row.label||row.key} » ?`)) return;
-      updateConfig(c => { c.services.splice(idx, 1); if (c.costsM2) delete c.costsM2[row.key]; });
+      updateConfig(c => {
+        c.services.splice(idx, 1);
+        if (c.costsM2) delete c.costsM2[row.key];
+      });
       try { delete state.services?.[row.key]; } catch {}
-      renderServicesAdmin(); renderAllNumbers();
+      renderServicesAdmin(); // se re-dessine
+      renderAllNumbers();    // met à jour "Mes coûts de revient"
+      // Devis se reconstruit tout seul via l’event ADMIN_SERVICES_UPDATED émis par applyConfig
     });
     tdAct.appendChild(del);
 
@@ -68,6 +81,7 @@ export function renderServicesAdmin(){
     tbody.appendChild(tr);
   });
 
+  // Ajouter une prestation
   const btnAdd = document.getElementById('adm-add');
   if (btnAdd && !btnAdd.__bound) {
     btnAdd.__bound = true;
@@ -76,8 +90,12 @@ export function renderServicesAdmin(){
       const base = slug(label);
       const set = new Set((loadConfig().services || []).map(s => s.key));
       const key = uniq(base, set);
+
       updateConfig(c => { (c.services ||= []).push({ key, label, pvTTC: 0 }); });
-      renderServicesAdmin(); renderAllNumbers();
+
+      renderServicesAdmin(); // nouvelle ligne
+      renderAllNumbers();    // récap mis à jour
+      // Devis : reconstruction auto via event
       document.querySelector('#adm-services-body tr:last-child input[type="text"]')?.focus();
     });
   }
