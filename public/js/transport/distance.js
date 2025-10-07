@@ -2,20 +2,20 @@
 import { PRICING } from '/js/devis/constants.js';
 import { state } from '../state.js';
 
-// Km rate dynamique (vient de l'onglet CR via applyConfig)
+// Helper DOM
+const $ = (id) => document.getElementById(id);
+
+// Barème €/km (vient de l’onglet CR via applyConfig)
 const kmRate = () => Number(PRICING?.transport?.kmRate) || 0;
 
-// Petit helper UI
-function $(id) { return document.getElementById(id); }
-
+/** Met à jour l'affichage de la distance (auto ou manuel) */
 export function refreshDistanceUI() {
-  const autoBlock     = $('distanceAutoBlock');
-  const manualToggle  = $('manualDistanceToggle');
-  const manualInput   = $('distanceManual');
+  const autoBlock    = $('distanceAutoBlock');
+  const manualToggle = $('manualDistanceToggle');
+  const manualInput  = $('distanceManual');
 
   const km = Number(state?.transport?.distanceKm) || 0;
 
-  // Affichage du bloc auto / champ manuel
   if (manualToggle?.checked) {
     manualInput?.classList.remove('hidden');
     autoBlock?.classList.add('hidden');
@@ -25,14 +25,20 @@ export function refreshDistanceUI() {
     if (autoBlock) autoBlock.textContent = `${km.toFixed(1)} km`;
   }
 
-  // Si tu as des zones pour afficher le prix transport, tu peux décommenter :
-  // const costTTC = km * kmRate();
+  // Si tu veux afficher le coût transport TTC, dé-commente :
   // const elCost = $('transportCost');
-  // if (elCost) elCost.textContent = new Intl.NumberFormat('fr-FR',{style:'currency',currency:'EUR'}).format(costTTC);
+  // if (elCost) {
+  //   const costTTC = km * kmRate();
+  //   elCost.textContent = new Intl.NumberFormat('fr-FR',{ style:'currency', currency:'EUR' }).format(costTTC);
+  // }
 }
 
-// Calcule la distance (manuel => valeur champ ; sinon Google DistanceMatrix si dispo)
-// Met à jour state.transport.distanceKm puis rafraîchit l'UI et appelle le callback.
+/**
+ * Calcule la distance :
+ * - si "manuel" => lit le champ et met à jour state.transport.distanceKm
+ * - sinon => Google DistanceMatrix (si dispo). Fallback: 0 si pas assez d'infos.
+ * Appelle `callback()` après mise à jour pour déclencher un recompute global.
+ */
 export function computeDistance(callback) {
   const manualToggle = $('manualDistanceToggle');
   const manualInput  = $('distanceManual');
@@ -50,7 +56,7 @@ export function computeDistance(callback) {
   const pickupEl   = $('transportAddressPickup');
   const deliveryEl = $('transportAddressDelivery');
 
-  // Fallback: si pickup vide, on prend l'adresse de référence (onglet CR)
+  // Fallback origine : adresse de référence définie dans l’onglet CR
   const origin      = (pickupEl?.value || PRICING?.transport?.baseAddress || '').trim();
   const destination = (deliveryEl?.value || '').trim();
 
@@ -76,10 +82,10 @@ export function computeDistance(callback) {
           const el = res?.rows?.[0]?.elements?.[0];
           const meters = el?.distance?.value ?? 0;
           const km = meters / 1000;
-          state.transport.distanceKm = Math.round(km * 10) / 10; // 0.1 km
+          state.transport.distanceKm = Math.round(km * 10) / 10; // arrondi 0.1 km
         } else {
           console.warn('[distance] DistanceMatrix status:', status);
-          // on ne change pas la valeur si échec
+          // on garde la valeur courante si échec
         }
         refreshDistanceUI();
         if (typeof callback === 'function') callback();
