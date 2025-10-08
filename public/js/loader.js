@@ -15,17 +15,33 @@ async function getPartial(name) {
   return txt;
 }
 
-function showErr(container, title, err) {
-  container.innerHTML = `
-    <div class="max-w-3xl mx-auto p-4 mt-6 rounded-xl border border-rose-200 bg-rose-50 text-rose-900">
-      <div class="font-semibold mb-1">${title}</div>
-      <pre class="text-xs overflow-auto">${(err && err.message) || err}</pre>
-    </div>`;
+// ------------------------------
+// Affichage d’erreur via partial (fallback texte)
+// Attends un partial 'error.html' avec [data-slot="title"] et [data-slot="message"]
+// ------------------------------
+async function showErr(container, title, err) {
+  const msg = (err && err.message) || String(err || 'Erreur inconnue');
+  try {
+    const html = await getPartial('error'); // public/partials/error.html
+    const doc = new DOMParser().parseFromString(html, 'text/html');
+    const root = doc.body.firstElementChild || document.createElement('div');
+
+    const t = root.querySelector('[data-slot="title"]');
+    const m = root.querySelector('[data-slot="message"]');
+    if (t) t.textContent = title;
+    if (m) m.textContent = msg;
+
+    container.replaceChildren(root);
+  } catch {
+    // fallback ultra simple sans HTML
+    container.textContent = `${title} — ${msg}`;
+  }
 }
 
 // ------------------------------
-// Appliquer la config Admin (PV/CR/transport) avant de construire l'UI
-// Essaie d’abord /js/config/index.js, sinon retombe sur /js/config.js
+// Appliquer la config Admin (PV/CR/transport)
+// 1) /js/config/index.js (nouveau)
+// 2) fallback /js/config.js (ancien)
 // ------------------------------
 async function applyAdminConfig() {
   try {
@@ -34,7 +50,6 @@ async function applyAdminConfig() {
     return;
   } catch {}
   try {
-    // compat si tu n'as pas encore mis en place /config/index.js
     const { loadConfig, applyConfig } = await import('/js/config.js');
     applyConfig(loadConfig());
   } catch (e) {
@@ -53,61 +68,68 @@ export async function loadView(tab) {
   // Onglet DEVIS
   // ---------------------------
   if (tab === 'devis') {
-    // structure conteneur
-    view.innerHTML = `
-      <div class="max-w-7xl mx-auto px-4 py-6 lg:py-8">
-        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          <div id="view-main" class="lg:col-span-2 space-y-6"></div>
-          <aside id="view-side" class="lg:col-span-1"></aside>
-        </div>
-      </div>
-    `;
-
     try {
-      // charge les partials
-      const [formHTML, sideHTML] = await Promise.all([
-        getPartial('devis.form'),
-        getPartial('devis.sidebar'),
-      ]);
+      // 1) Charger la *structure* de l’onglet depuis un partial
+      //    ➜ crée le wrapper avec #view-main et #view-side
+      //    (ex: public/partials/devis.layout.html)
+      view.innerHTML = await getPartial('devis.layout');
 
+      // 2) Injecter les deux sous-partials dans leurs conteneurs
       const main = document.getElementById('view-main');
       const side = document.getElementById('view-side');
       if (!main || !side) throw new Error('Containers view-main/view-side manquants');
 
-      main.innerHTML = formHTML;
-      side.innerHTML = sideHTML;
+      main.innerHTML = await getPartial('devis.form');
+      side.innerHTML = await getPartial('devis.sidebar');
 
-      // applique la config admin (prestations/PV/transport) avant de construire l’UI
+      // 3) Appliquer la config admin avant la construction de l’UI
       await applyAdminConfig();
 
-      // année
+      // 4) Année footer (si présente dans le sidebar)
       const y = document.getElementById('year');
       if (y) y.textContent = new Date().getFullYear();
 
-      // --- Nouvel orchestrateur Devis
-      const { initDevis } = await import('/js/devis/ui/index.js');
-      // --- Recompute central (à passer en callback aux modules qui en ont besoin)
-      const { recompute } = await import('/js/devis/ui/recompute.js');
+      // 5) Imports nécessaires au recalcul local
+      const [{ computePricing }, { renderTotals }, { renderRecapServices }, { state }] =
+        await Promise.all([
+          import('/js/devis/pricing.js'),
+          import('/js/devis/recap/totals.js'),
+          import('/js/devis/recap/services.js'),
+          import('/js/state.js'),
+        ]);
 
-      // Initialise l'UI Devis (cases prestations dynamiques + 1er calcul)
-      (initDevis || (() => {}))();
+      // 6) Recompute central : 1 seul compute, passage de 'pricing' au récap services
+      async function rerender() {
+        try {
+          const pricing = computePricing();
+          try { renderTotals(pricing); } catch {}
+          try { renderRecapServices(state, pricing); } catch {}
+          try { window.dispatchEvent(new CustomEvent('devis:changed', { detail: { pricing } })); } catch {}
+        } catch (e) {
+          console.debug('[loader] rerender ignoré:', e?.message || e);
+        }
+      }
 
-      // --- Modules "legacy" utiles : dimensions/panier/Maps/Stripe
-      // (Tolérants : s'ils n'existent pas chez toi, on log juste un warn)
+      // 7) Orchestrateur UI Devis (construit la liste prestations, binds, etc.)
+      try {
+        const { initDevis } = await import('/js/devis/ui/index.js');
+        initDevis && initDevis();
+      } catch (e) { console.warn('[loader] devis/ui/index.js', e); }
+
+      // 8) Modules optionnels : dimensions / panier / Maps / Stripe
       try {
         const { initDimensions } = await import('/js/devis/dimensions.js');
-        try { initDimensions(recompute); } catch { initDimensions && initDimensions(); }
+        try { initDimensions(rerender); } catch { initDimensions && initDimensions(); }
       } catch (e) { console.warn('[loader] dimensions.js', e); }
 
       try {
         const { initCart } = await import('/js/devis/cart.js');
-        try { initCart(() => recompute()); } catch { initCart && initCart(); }
+        try { initCart(() => rerender()); } catch { initCart && initCart(); }
       } catch (e) { console.warn('[loader] cart.js', e); }
 
       try {
         const { initMapsBindings, loadGoogleMaps } = await import('/js/transport/maps.js');
-        try { initMapsBindings(recompute); } catch { initMapsBindings && initMapsBindings(); }
-        // Charge Google Maps en idle
+        try { initMapsBindings(rerender); } catch { initMapsBindings && initMapsBindings(); }
         if ('requestIdleCallback' in window) requestIdleCallback(() => loadGoogleMaps?.(), { timeout: 2000 });
         else setTimeout(() => loadGoogleMaps?.(), 800);
       } catch (e) { console.warn('[loader] maps.js', e); }
@@ -117,17 +139,17 @@ export async function loadView(tab) {
         initStripe && initStripe();
       } catch (e) { console.warn('[loader] stripe.js', e); }
 
-      // Premier rendu / recalcul de sécurité
-      try { recompute(); } catch {}
+      // 9) Premier rendu
+      await rerender();
 
-      // Pré-charger d'autres partials
+      // 10) Pré-charger les autres partials
       const pre = () => ['cr','ch'].forEach(n => getPartial(n).catch(() => {}));
       if ('requestIdleCallback' in window) requestIdleCallback(pre, { timeout: 1500 });
       else setTimeout(pre, 700);
 
     } catch (e) {
       console.error(e);
-      showErr(view, 'Erreur lors du chargement de “Devis”', e);
+      await showErr(view, 'Erreur lors du chargement de “Devis”', e);
     }
     return;
   }
@@ -137,17 +159,13 @@ export async function loadView(tab) {
   // ---------------------------
   if (tab === 'cr') {
     try {
-      view.innerHTML = await getPartial('cr');
-
-      // applique la config (au cas où l'utilisateur arrive directement sur /#cr)
+      view.innerHTML = await getPartial('cr'); // 100% HTML depuis partial
       await applyAdminConfig();
-
-      // Nouvel orchestrateur CR (admin + récap)
       const { initCR } = await import('/js/cout_de_revient/index.js');
       (initCR || (() => {}))();
     } catch (e) {
       console.error(e);
-      showErr(view, 'Erreur lors du chargement de “Coût de revient”', e);
+      await showErr(view, 'Erreur lors du chargement de “Coût de revient”', e);
     }
     return;
   }
@@ -157,17 +175,17 @@ export async function loadView(tab) {
   // ---------------------------
   if (tab === 'ch') {
     try {
-      view.innerHTML = await getPartial('ch');
+      view.innerHTML = await getPartial('ch'); // 100% HTML depuis partial
       const mod = await import('/js/cout_horaire/ch.js');
       (mod.initCH || mod.default || (() => {}))();
       (mod.renderCH || (() => {}))();
     } catch (e) {
       console.error(e);
-      showErr(view, 'Erreur lors du chargement de “Coût horaire”', e);
+      await showErr(view, 'Erreur lors du chargement de “Coût horaire”', e);
     }
     return;
   }
 
   // onglet inconnu
-  showErr(view, 'Onglet inconnu', tab);
+  await showErr(view, 'Onglet inconnu', tab);
 }
