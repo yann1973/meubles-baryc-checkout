@@ -1,7 +1,7 @@
 // public/js/loader.js
 
 // ------------------------------
-// Cache des partials
+// Cache des partials (HTML uniquement)
 // ------------------------------
 const HTML_CACHE = new Map();
 
@@ -16,24 +16,21 @@ async function getPartial(name) {
 }
 
 // ------------------------------
-// Affichage d’erreur via partial (fallback texte)
-// Attends un partial 'error.html' avec [data-slot="title"] et [data-slot="message"]
+// Affichage d’erreur via partial (fallback texte simple)
+// public/partials/error.html avec [data-slot="title"], [data-slot="message"]
 // ------------------------------
 async function showErr(container, title, err) {
   const msg = (err && err.message) || String(err || 'Erreur inconnue');
   try {
-    const html = await getPartial('error'); // public/partials/error.html
+    const html = await getPartial('error');
     const doc = new DOMParser().parseFromString(html, 'text/html');
     const root = doc.body.firstElementChild || document.createElement('div');
-
     const t = root.querySelector('[data-slot="title"]');
     const m = root.querySelector('[data-slot="message"]');
     if (t) t.textContent = title;
     if (m) m.textContent = msg;
-
     container.replaceChildren(root);
   } catch {
-    // fallback ultra simple sans HTML
     container.textContent = `${title} — ${msg}`;
   }
 }
@@ -58,6 +55,58 @@ async function applyAdminConfig() {
 }
 
 // ------------------------------
+// Bind “live” : déclenche rerender quand l’utilisateur modifie l’UI
+// (sans écrire d’HTML ici; on écoute simplement les éléments existants)
+// ------------------------------
+function bindLiveRerender(rerender) {
+  const main = document.getElementById('view-main');
+  if (!main) return;
+
+  // Prestations (cases à cocher) — conteneur #servicesM2 si présent
+  const servicesBox = document.getElementById('servicesM2');
+  if (servicesBox && !servicesBox.__bound) {
+    servicesBox.__bound = true;
+    servicesBox.addEventListener('change', (e) => {
+      const t = e.target;
+      if (t && t.matches('input[type="checkbox"]')) rerender();
+    });
+  }
+
+  // Dimensions : longueur / largeur / hauteur
+  ['longueur', 'largeur', 'hauteur'].forEach((id) => {
+    const el = document.getElementById(id);
+    if (el && !el.__bound) {
+      el.__bound = true;
+      el.addEventListener('input', () => rerender());
+      el.addEventListener('change', () => rerender());
+    }
+  });
+
+  // Pièces (ferrures) si ça impacte le prix
+  ['f_change', 'f_polish'].forEach((id) => {
+    const el = document.getElementById(id);
+    if (el && !el.__bound) {
+      el.__bound = true;
+      el.addEventListener('input', () => rerender());
+      el.addEventListener('change', () => rerender());
+    }
+  });
+
+  // Délégation générique : tout élément marqués data-recompute="1"
+  if (!main.__recomputeBound) {
+    main.__recomputeBound = true;
+    main.addEventListener('change', (e) => {
+      const t = e.target;
+      if (t && t.dataset && t.dataset.recompute === '1') rerender();
+    });
+    main.addEventListener('input', (e) => {
+      const t = e.target;
+      if (t && t.dataset && t.dataset.recompute === '1') rerender();
+    });
+  }
+}
+
+// ------------------------------
 // API principale
 // ------------------------------
 export async function loadView(tab) {
@@ -69,12 +118,11 @@ export async function loadView(tab) {
   // ---------------------------
   if (tab === 'devis') {
     try {
-      // 1) Charger la *structure* de l’onglet depuis un partial
-      //    ➜ crée le wrapper avec #view-main et #view-side
-      //    (ex: public/partials/devis.layout.html)
+      // 1) Structure layout (100% dans un partial)
+      //    -> doit contenir #view-main et #view-side
       view.innerHTML = await getPartial('devis.layout');
 
-      // 2) Injecter les deux sous-partials dans leurs conteneurs
+      // 2) Injecter form + sidebar (tes partials existants)
       const main = document.getElementById('view-main');
       const side = document.getElementById('view-side');
       if (!main || !side) throw new Error('Containers view-main/view-side manquants');
@@ -82,14 +130,14 @@ export async function loadView(tab) {
       main.innerHTML = await getPartial('devis.form');
       side.innerHTML = await getPartial('devis.sidebar');
 
-      // 3) Appliquer la config admin avant la construction de l’UI
+      // 3) Config admin avant construction UI
       await applyAdminConfig();
 
-      // 4) Année footer (si présente dans le sidebar)
+      // 4) Footer année (si présent)
       const y = document.getElementById('year');
       if (y) y.textContent = new Date().getFullYear();
 
-      // 5) Imports nécessaires au recalcul local
+      // 5) Imports nécessaires au calcul + rendu recap
       const [{ computePricing }, { renderTotals }, { renderRecapServices }, { state }] =
         await Promise.all([
           import('/js/devis/pricing.js'),
@@ -98,7 +146,7 @@ export async function loadView(tab) {
           import('/js/state.js'),
         ]);
 
-      // 6) Recompute central : 1 seul compute, passage de 'pricing' au récap services
+      // 6) Recompute central : calcule une fois, passe pricing au récap services
       async function rerender() {
         try {
           const pricing = computePricing();
@@ -110,13 +158,15 @@ export async function loadView(tab) {
         }
       }
 
-      // 7) Orchestrateur UI Devis (construit la liste prestations, binds, etc.)
+      // 7) Orchestrateur Devis (construit la liste des prestations, binds internes)
       try {
         const { initDevis } = await import('/js/devis/ui/index.js');
-        initDevis && initDevis();
-      } catch (e) { console.warn('[loader] devis/ui/index.js', e); }
+        if (typeof initDevis === 'function') initDevis(); // pas d’HTML ici, juste des binds côté UI
+      } catch (e) {
+        console.warn('[loader] devis/ui/index.js', e);
+      }
 
-      // 8) Modules optionnels : dimensions / panier / Maps / Stripe
+      // 8) Modules optionnels : dimensions / panier / Maps / Stripe (tolérants)
       try {
         const { initDimensions } = await import('/js/devis/dimensions.js');
         try { initDimensions(rerender); } catch { initDimensions && initDimensions(); }
@@ -139,11 +189,14 @@ export async function loadView(tab) {
         initStripe && initStripe();
       } catch (e) { console.warn('[loader] stripe.js', e); }
 
-      // 9) Premier rendu
+      // 9) Bind “live” pour déclencher rerender sur les inputs clés
+      bindLiveRerender(rerender);
+
+      // 10) Premier rendu
       await rerender();
 
-      // 10) Pré-charger les autres partials
-      const pre = () => ['cr','ch'].forEach(n => getPartial(n).catch(() => {}));
+      // 11) Pré-charger les autres partials
+      const pre = () => ['cr', 'ch'].forEach(n => getPartial(n).catch(() => {}));
       if ('requestIdleCallback' in window) requestIdleCallback(pre, { timeout: 1500 });
       else setTimeout(pre, 700);
 
