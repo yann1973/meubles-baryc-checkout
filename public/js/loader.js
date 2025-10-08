@@ -58,53 +58,105 @@ async function applyAdminConfig() {
 // Bind “live” : déclenche rerender quand l’utilisateur modifie l’UI
 // (sans écrire d’HTML ici; on écoute simplement les éléments existants)
 // ------------------------------
-function bindLiveRerender(rerender) {
+// Mets à jour le state AVANT d'appeler rerender()
+function bindLiveRerender(rerender, state) {
   const main = document.getElementById('view-main');
   if (!main) return;
 
-  // Prestations (cases à cocher) — conteneur #servicesM2 si présent
+  // --- Prestations (checkboxes) ---
   const servicesBox = document.getElementById('servicesM2');
   if (servicesBox && !servicesBox.__bound) {
     servicesBox.__bound = true;
     servicesBox.addEventListener('change', (e) => {
       const t = e.target;
-      if (t && t.matches('input[type="checkbox"]')) rerender();
+      if (t && t.matches('input[type="checkbox"][data-key]')) {
+        const key = t.getAttribute('data-key');
+        if (!state.services) state.services = {};
+        state.services[key] = !!t.checked;
+        rerender();
+      }
     });
   }
 
-  // Dimensions : longueur / largeur / hauteur
-  ['longueur', 'largeur', 'hauteur'].forEach((id) => {
-    const el = document.getElementById(id);
-    if (el && !el.__bound) {
-      el.__bound = true;
-      el.addEventListener('input', () => rerender());
-      el.addEventListener('change', () => rerender());
-    }
-  });
+  // --- Dimensions (m) ---
+  const num = (v) => {
+    const n = Number(String(v).replace(',', '.'));
+    return Number.isFinite(n) ? n : 0;
+  };
+  const set = (obj, k, v) => { if (obj) obj[k] = v; };
 
-  // Pièces (ferrures) si ça impacte le prix
-  ['f_change', 'f_polish'].forEach((id) => {
-    const el = document.getElementById(id);
-    if (el && !el.__bound) {
-      el.__bound = true;
-      el.addEventListener('input', () => rerender());
-      el.addEventListener('change', () => rerender());
-    }
-  });
+  const L = document.getElementById('longueur');
+  const W = document.getElementById('largeur');
+  const H = document.getElementById('hauteur');
 
-  // Délégation générique : tout élément marqués data-recompute="1"
+  const bindNum = (el, k) => {
+    if (!el || el.__bound) return;
+    el.__bound = true;
+    const upd = () => { set(state, k, num(el.value)); rerender(); };
+    el.addEventListener('input', upd);
+    el.addEventListener('change', upd);
+  };
+
+  bindNum(L, 'L');
+  bindNum(W, 'W');
+  bindNum(H, 'H');
+
+  // --- Ferrures (pièces) ---
+  if (!state.pieceCounts) state.pieceCounts = {};
+  const fChange = document.getElementById('f_change');
+  const fPolish = document.getElementById('f_polish');
+
+  const bindInt = (el, key) => {
+    if (!el || el.__bound) return;
+    el.__bound = true;
+    const upd = () => { state.pieceCounts[key] = Math.max(0, parseInt(el.value || '0', 10) || 0); rerender(); };
+    el.addEventListener('input', upd);
+    el.addEventListener('change', upd);
+  };
+  bindInt(fChange, 'ferrures_change');
+  bindInt(fPolish, 'ferrures_polissage');
+
+  // --- Distance manuelle / mode transport ---
+  if (!state.transport) state.transport = { mode: 'client', distanceKm: 0, pickKm: 0, dropKm: 0 };
+  const manualToggle  = document.getElementById('manualDistanceToggle');
+  const distanceInput = document.getElementById('distanceManual');
+
+  if (manualToggle && !manualToggle.__bound) {
+    manualToggle.__bound = true;
+    manualToggle.addEventListener('change', () => {
+      if (manualToggle.checked) {
+        state.transport.mode = 'baryc';
+        state.transport.distanceKm = num(distanceInput?.value || 0);
+      } else {
+        // repassera en auto (Google) via maps.js, on laisse km tel quel
+      }
+      rerender();
+    });
+  }
+
+  if (distanceInput && !distanceInput.__bound) {
+    distanceInput.__bound = true;
+    distanceInput.addEventListener('input', () => {
+      state.transport.mode = 'baryc';
+      state.transport.distanceKm = num(distanceInput.value || 0);
+      rerender();
+    });
+    distanceInput.addEventListener('change', () => {
+      state.transport.mode = 'baryc';
+      state.transport.distanceKm = num(distanceInput.value || 0);
+      rerender();
+    });
+  }
+
+  // --- Délégation générique (sécurité) ---
   if (!main.__recomputeBound) {
     main.__recomputeBound = true;
-    main.addEventListener('change', (e) => {
-      const t = e.target;
-      if (t && t.dataset && t.dataset.recompute === '1') rerender();
-    });
-    main.addEventListener('input', (e) => {
-      const t = e.target;
-      if (t && t.dataset && t.dataset.recompute === '1') rerender();
-    });
+    const maybe = (e) => { const t = e.target; if (t?.dataset?.recompute === '1') rerender(); };
+    main.addEventListener('input', maybe);
+    main.addEventListener('change', maybe);
   }
 }
+
 
 // ------------------------------
 // API principale
@@ -190,7 +242,7 @@ export async function loadView(tab) {
       } catch (e) { console.warn('[loader] stripe.js', e); }
 
       // 9) Bind “live” pour déclencher rerender sur les inputs clés
-      bindLiveRerender(rerender);
+      bindLiveRerender(rerender, state);
 
       // 10) Premier rendu
       await rerender();
