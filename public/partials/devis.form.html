@@ -58,9 +58,18 @@
   <h2 class="text-xl font-semibold mb-4">Type & dimensions</h2>
   <div id="typeButtons" class="grid grid-cols-2 md:grid-cols-5 gap-2 mb-4"></div>
   <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
-    <label class="block text-sm"><span class="text-neutral-700">Longueur (m)</span><input id="longueur" type="number" step="0.01" min="0" class="mt-1 w-full rounded-xl border border-neutral-300 px-3 py-2" value="0"/></label>
-    <label class="block text-sm"><span class="text-neutral-700">Profondeur (m)</span><input id="largeur" type="number" step="0.01" min="0" class="mt-1 w-full rounded-xl border border-neutral-300 px-3 py-2" value="0"/></label>
-    <label class="block text-sm"><span class="text-neutral-700">Hauteur (m)</span><input id="hauteur" type="number" step="0.01" min="0" class="mt-1 w-full rounded-xl border border-neutral-300 px-3 py-2" value="0"/></label>
+    <label class="block text-sm">
+      <span class="text-neutral-700">Longueur (m)</span>
+      <input id="longueur" data-recompute="1" type="number" step="0.01" min="0" class="mt-1 w-full rounded-xl border border-neutral-300 px-3 py-2" value="0"/>
+    </label>
+    <label class="block text-sm">
+      <span class="text-neutral-700">Profondeur (m)</span>
+      <input id="largeur" data-recompute="1" type="number" step="0.01" min="0" class="mt-1 w-full rounded-xl border border-neutral-300 px-3 py-2" value="0"/>
+    </label>
+    <label class="block text-sm">
+      <span class="text-neutral-700">Hauteur (m)</span>
+      <input id="hauteur" data-recompute="1" type="number" step="0.01" min="0" class="mt-1 w-full rounded-xl border border-neutral-300 px-3 py-2" value="0"/>
+    </label>
   </div>
   <div class="mt-3">
     <div class="px-4 py-4 rounded-2xl border border-neutral-200 bg-neutral-50 flex items-center justify-between">
@@ -81,12 +90,19 @@
     <div class="rounded-2xl border border-neutral-200 bg-white p-4">
       <h3 class="text-lg font-semibold mb-2">À la pièce</h3>
       <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
-        <label class="block text-sm"><span class="text-neutral-700">Changement de ferrures (18 €/pièce)</span><input id="f_change" type="number" step="1" min="0" class="mt-1 w-full rounded-xl border border-neutral-300 px-3 py-2" value="0"/></label>
-        <label class="block text-sm"><span class="text-neutral-700">Polissage des ferrures (12 €/pièce)</span><input id="f_polish" type="number" step="1" min="0" class="mt-1 w-full rounded-xl border border-neutral-300 px-3 py-2" value="0"/></label>
+        <label class="block text-sm">
+          <span class="text-neutral-700">Changement de ferrures (18 €/pièce)</span>
+          <input id="f_change" data-recompute="1" type="number" step="1" min="0" class="mt-1 w-full rounded-xl border border-neutral-300 px-3 py-2" value="0"/>
+        </label>
+        <label class="block text-sm">
+          <span class="text-neutral-700">Polissage des ferrures (12 €/pièce)</span>
+          <input id="f_polish" data-recompute="1" type="number" step="1" min="0" class="mt-1 w-full rounded-xl border border-neutral-300 px-3 py-2" value="0"/>
+        </label>
       </div>
     </div>
   </div>
 </section>
+
 <!-- Transport -->
 <section class="rounded-2xl border border-neutral-200 bg-white p-5 shadow-sm">
   <h2 class="text-xl font-semibold mb-4">Transport</h2>
@@ -130,7 +146,7 @@
       <div class="flex items-center justify-between">
         <span class="text-sm text-neutral-700">Distance totale (km)</span>
         <label class="text-xs flex items-center gap-1">
-          <input id="manualDistanceToggle" type="checkbox" />
+          <input id="manualDistanceToggle" type="checkbox" data-recompute="1" />
           Saisir manuellement
         </label>
       </div>
@@ -141,7 +157,7 @@
       </div>
 
       <!-- champ manuel masqué par défaut -->
-      <input id="distanceManual" type="number" step="0.1" min="0"
+      <input id="distanceManual" data-recompute="1" type="number" step="0.1" min="0"
              class="hidden mt-1 w-full rounded-2xl border border-neutral-300 px-3 py-2" value="0"/>
     </div>
 
