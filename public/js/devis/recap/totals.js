@@ -1,77 +1,122 @@
 // public/js/devis/recap/totals.js
 import { euro } from '/js/common/dom.js';
 
+// Petits helpers sûrs
+const num = (v, def = 0) => {
+  const n = Number(v);
+  return Number.isFinite(n) ? n : def;
+};
+const set = (id, txt) => {
+  const el = document.getElementById(id);
+  if (el) el.textContent = txt;
+};
+const setAll = (sel, txt) => {
+  document.querySelectorAll(sel).forEach(el => { el.textContent = txt; });
+};
+
 /**
- * Met à jour les totaux (HT/TVA/TTC, surface, transport).
- * Le rendu est tolérant : si un élément n'existe pas, on l'ignore.
+ * Met à jour les totaux (surface, HT/TVA/TTC, transport) dans la sidebar Devis.
+ * Tolérant : met à jour les nouveaux IDs et garde la compat legacy.
  * @param {Object} pricing - objet retourné par computePricing()
  */
 export function renderTotals(pricing = {}) {
-  const totals    = pricing.totals    || {};
-  const goods     = pricing.goods     || {};
-  const transport = pricing.transport || {};
-  const surface   = Number(pricing.totalSurface || 0);
+  const totals    = pricing?.totals    || {};
+  const goods     = pricing?.goods     || {};
+  const transport = pricing?.transport || {};
 
-  // helpers
-  const set = (id, txt) => { const el = document.getElementById(id); if (el) el.textContent = txt; };
-  const setData = (name, txt) => {
-    document.querySelectorAll(`[data-total="${name}"]`).forEach(el => { el.textContent = txt; });
-  };
+  // --- Surface ---
+  const surface = num(pricing?.totalSurface, 0);
+  const surfTxt = `${surface.toFixed(2)} m²`;
+  set('totalSurface',   surfTxt);           // sidebar (nouvel ID)
+  set('surfaceDisplay', surfTxt);           // compat (carte dimensions)
+  setAll('[data-surface]', surfTxt);
 
-  // Totaux principaux
-  const HT  = Number(totals.ht  ?? goods.ht  ?? 0);
-  const TVA = Number(totals.tva ?? 0);
-  const TTC = Number(totals.ttc ?? goods.ttc ?? 0);
+  // --- Meubles HT/TVA/TTC (on privilégie goods, fallback totals) ---
+  const goodsHT  = num(goods?.ht,  num(totals?.ht,  0));
+  // TVA : priorité à goods.tva, sinon totals.tva, sinon calc TTC-HT (si cohérent)
+  let goodsTVA   = num(goods?.tva, num(totals?.tva, 0));
+  const goodsTTC = num(goods?.ttc, num(totals?.ttc, 0));
 
-  // Écritures (IDs classiques)
-  set('totalHT',  euro(HT));
-  set('totalTVA', euro(TVA));
-  set('totalTTC', euro(TTC));
-
-  // Doubles protections (data-attrs facultatifs)
-  setData('ht',  euro(HT));
-  setData('tva', euro(TVA));
-  setData('ttc', euro(TTC));
-
-  // Détails "goods" si présents
-  set('goodsHT',  euro(Number(goods.ht  || 0)));
-  set('goodsTTC', euro(Number(goods.ttc || 0)));
-
-  // Surface
-  set('surfaceDisplay', surface ? `${surface.toFixed(2)} m²` : '0.00 m²');
-  document.querySelectorAll('[data-surface]').forEach(el => { el.textContent = `${surface.toFixed(2)} m²`; });
-
-  // Transport
-  set('transportCost', euro(Number(transport.ttc || 0)));
-  if (typeof transport.promoRate === 'number') {
-    // ex: -10 %
-    const promoTxt = transport.promoRate ? `${Math.round(transport.promoRate * 100)} %` : '0 %';
-    set('promoRate', promoTxt);
-    document.querySelectorAll('[data-transport="promoRate"]').forEach(el => { el.textContent = promoTxt; });
+  if (!goodsTVA && goodsTTC >= goodsHT) {
+    const calcTVA = goodsTTC - goodsHT;
+    if (Number.isFinite(calcTVA)) goodsTVA = calcTVA;
   }
 
-  // Surcharge / remise éventuelle (si tu les affiches)
-  if (typeof transport.surcharge === 'number') {
-    set('transportSurcharge', euro(Number(transport.surcharge || 0)));
+  // --- Transport TTC ---
+  const transportTTC = num(transport?.ttc, num(transport?.totalTTC, 0));
+
+  // --- Total commande TTC (meubles TTC + transport TTC) ---
+  const grandTTC = goodsTTC + transportTTC;
+
+  // --- Nouveaux IDs (sidebar) ---
+  set('prixHT',        euro(goodsHT));
+  set('prixTVA',       euro(goodsTVA));
+  set('prixTransport', euro(transportTTC));
+  set('prixTTC',       euro(grandTTC));
+
+  // --- Infos transport optionnelles ---
+  const info   = transport?.info   ?? transport?.label  ?? '';
+  const detail = transport?.detail ?? transport?.debug  ?? '';
+  set('transportTarifInfo',   info || '');
+  set('recapTransportDetail', detail || '');
+
+  // --- Compat anciens IDs (si encore présents dans ta page) ---
+  set('totalHT',       euro(goodsHT));
+  set('totalTVA',      euro(goodsTVA));
+  set('totalTTC',      euro(goodsTTC));     // ancien “TTC meubles” uniquement
+  set('goodsHT',       euro(goodsHT));
+  set('goodsTTC',      euro(goodsTTC));
+  set('transportCost', euro(transportTTC));
+
+  setAll('[data-total="ht"]',  euro(goodsHT));
+  setAll('[data-total="tva"]', euro(goodsTVA));
+  setAll('[data-total="ttc"]', euro(goodsTTC));
+
+  if (typeof transport?.promoRate === 'number') {
+    const promoTxt = transport.promoRate ? `${Math.round(transport.promoRate * 100)} %` : '0 %';
+    set('promoRate', promoTxt);
+    setAll('[data-transport="promoRate"]', promoTxt);
+  }
+
+  if (typeof transport?.surcharge === 'number') {
+    set('transportSurcharge', euro(num(transport.surcharge, 0)));
   }
 }
 
 /**
- * Nettoie l'affichage du récapitulatif (totaux à zéro / texte vide).
- * Utile quand on réinitialise le devis.
+ * Remet à zéro l’affichage des totaux.
  */
 export function clearRecap() {
-  const empty = (sel) => document.querySelectorAll(sel).forEach(el => el.textContent = '');
-  const zero  = (sel) => document.querySelectorAll(sel).forEach(el => el.textContent = euro(0));
+  const zero  = (id) => { const el = document.getElementById(id); if (el) el.textContent = euro(0); };
+  const text  = (id, v) => { const el = document.getElementById(id); if (el) el.textContent = v; };
+  const all   = (sel, v) => { document.querySelectorAll(sel).forEach(el => { el.textContent = v; }); };
 
-  // IDs classiques
-  ['totalHT','totalTVA','totalTTC','goodsHT','goodsTTC','transportCost','transportSurcharge','promoRate','surfaceDisplay']
-    .forEach(id => { const el = document.getElementById(id); if (el) el.textContent = id === 'surfaceDisplay' ? '0.00 m²' : euro(0); });
+  // Surface
+  text('totalSurface', '0,00 m²');
+  text('surfaceDisplay', '0,00 m²');
+  all('[data-surface]', '0,00 m²');
 
-  // Data attrs éventuels
-  zero('[data-total="ht"]');
-  zero('[data-total="tva"]');
-  zero('[data-total="ttc"]');
-  empty('[data-surface]');
-  empty('[data-transport="promoRate"]');
+  // Nouveaux IDs (sidebar)
+  zero('prixHT');
+  zero('prixTVA');
+  zero('prixTransport');
+  zero('prixTTC');
+  text('transportTarifInfo', '');
+  text('recapTransportDetail', '');
+
+  // Compat anciens IDs
+  zero('totalHT');
+  zero('totalTVA');
+  zero('totalTTC');
+  zero('goodsHT');
+  zero('goodsTTC');
+  zero('transportCost');
+  zero('transportSurcharge');
+  text('promoRate', '');
+
+  // Data attrs (compat)
+  all('[data-total="ht"]',  euro(0));
+  all('[data-total="tva"]', euro(0));
+  all('[data-total="ttc"]', euro(0));
+  all('[data-transport="promoRate"]', '');
 }
