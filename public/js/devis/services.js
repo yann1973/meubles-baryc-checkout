@@ -1,56 +1,79 @@
-// public/js/devis/services.js
-export { buildServicesM2 as initServices } from '/js/devis/ui/buildServices.js';
-export { renderRecapServices } from '/js/devis/recap/services.js';
+// public/js/devis/recap/services.js
+import { PRICING } from '/js/devis/constants.js';
+import { euro } from '/js/common/dom.js';
+import { computePricing as _computePricing } from '/js/devis/pricing.js';
 
-import { PRICING, SERVICE_LABELS } from '../pricing.js';
-import { state } from '../state.js';
+/**
+ * Rendu du récap des prestations sélectionnées côté Devis.
+ * - Affiche le PV €/m² ET le total par prestation (PV×surface)
+ * - Utilise la surface du devis (pricing.totalSurface)
+ * @param {Object} state    - state global (doit contenir state.services)
+ * @param {Object?} pricing - résultat de computePricing() (optionnel)
+ */
+export function renderRecapServices(state = {}, pricing = null) {
+  const container =
+    document.getElementById('recapServices') ||
+    document.querySelector('[data-recap="services"]');
+  if (!container) return;
 
-export function initServices(onChanged){
-  const services = [
-    ['poncage','Ponçage de finition'],
-    ['aerogommage','Aérogommage'],
-    ['peinture1','Peinture 1 couleur'],
-    ['peinture2','Peinture 2 couleurs'],
-    ['teinte','Teinte'],
-    ['vernis','Vernis'],
-    ['consommables','Consommables'],
-  ];
-  const wrap = document.getElementById('servicesM2');
-  if(!wrap) return;
-  services.forEach(([key,label])=>{
-    const row=document.createElement('label'); row.className='flex items-center justify-between gap-3 px-3 py-2 rounded-xl border border-neutral-200';
-    const span=document.createElement('span'); span.textContent=`${label} (${new Intl.NumberFormat('fr-FR',{style:'currency',currency:'EUR'}).format(PRICING.servicesTTC[key])}/m²)`;
-    const input=document.createElement('input'); input.type='checkbox'; input.className='w-4 h-4'; input.checked=!!state.services[key];
-    input.onchange=()=>{ state.services[key]=input.checked; onChanged(); };
-    row.appendChild(span); row.appendChild(input); wrap.appendChild(row);
+  // Surface : on préfère l'objet pricing si fourni, sinon on tente un compute local
+  let surface = Number(pricing?.totalSurface ?? 0);
+  if (!Number.isFinite(surface) || surface <= 0) {
+    try {
+      const p = _computePricing?.();
+      if (p && Number.isFinite(p.totalSurface)) surface = Number(p.totalSurface);
+    } catch {}
+  }
+  if (!Number.isFinite(surface)) surface = 0;
+
+  // Liste des prestations cochées
+  const selectedKeys = Object.keys(state.services || {}).filter(k => state.services[k]);
+
+  // Map des libellés
+  const labelOf = (key) => {
+    const arr = PRICING.meta?.services || [];
+    const found = arr.find(s => s.key === key);
+    return found?.label || key;
+  };
+
+  // Reset conteneur
+  while (container.firstChild) container.removeChild(container.firstChild);
+
+  if (selectedKeys.length === 0) {
+    const p = document.createElement('p');
+    p.className = 'text-sm text-neutral-500';
+    p.textContent = 'Aucune prestation sélectionnée.';
+    container.appendChild(p);
+    return;
+  }
+
+  // Une ligne par prestation sélectionnée
+  selectedKeys.forEach((key) => {
+    const pvM2 = Number(PRICING.servicesTTC?.[key] ?? 0);
+    const total = pvM2 * surface;
+
+    const row = document.createElement('div');
+    row.className = 'flex items-center justify-between py-1';
+
+    const left = document.createElement('div');
+    left.textContent = labelOf(key);
+
+    const right = document.createElement('div');
+    right.className = 'text-right';
+
+    const totalEl = document.createElement('div');
+    totalEl.className = 'font-medium';
+    totalEl.textContent = euro(total);
+
+    const pvEl = document.createElement('div');
+    pvEl.className = 'text-xs text-neutral-500';
+    pvEl.textContent = `${euro(pvM2)}/m²`;
+
+    right.appendChild(totalEl);
+    right.appendChild(pvEl);
+
+    row.appendChild(left);
+    row.appendChild(right);
+    container.appendChild(row);
   });
-}
-
-export function renderRecapServices(){
-  const list = document.getElementById('recapServices');
-  if(!list) return;
-  list.innerHTML = '';
-  Object.entries(state.services).forEach(([k,checked])=>{
-    if(checked){
-      const li=document.createElement('li');
-      li.textContent = SERVICE_LABELS[k] || k;
-      list.appendChild(li);
-    }
-  });
-  if((state.pieceCounts.ferrures_change||0) > 0){
-    const li=document.createElement('li'); li.textContent = `Changement de ferrures × ${state.pieceCounts.ferrures_change}`; list.appendChild(li);
-  }
-  if((state.pieceCounts.ferrures_polissage||0) > 0){
-    const li=document.createElement('li'); li.textContent = `Polissage des ferrures × ${state.pieceCounts.ferrures_polissage}`; list.appendChild(li);
-  }
-  if(state.transport.mode === 'baryc'){
-    const li=document.createElement('li');
-    const p = Number(state.transport.pickKm)||0;
-    const dr = Number(state.transport.dropKm)||0;
-    const d = Number(state.transport.distanceKm)||0;
-    li.textContent = `Transport (Baryc) — Récup: ${p} km ×2 • Livraison: ${dr} km ×2 • Total: ${d} km`;
-    list.appendChild(li);
-  } else {
-    const li=document.createElement('li'); li.textContent = 'Transport à vos soins'; list.appendChild(li);
-  }
 }
