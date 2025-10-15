@@ -7,17 +7,22 @@ let mapsLoaded = false;
 let loading = false;
 let recomputeCb = null;
 
-// --- Origine "société" (modifiable depuis l'onglet CR via applyConfig)
+/* ----------------- Helpers config ----------------- */
+
+// Origine "société" (modifiable via l’onglet CR avec applyConfig)
 function getCompanyOrigin() {
   return PRICING?.transport?.baseAddress || '';
 }
 
-// --- Clé Google injectée par /env.js (window.ENV)
-function getMapsKey() {
-  return (window.ENV && window.ENV.GOOGLE_MAPS_API_KEY) || '';
+// Clé Google : CONFIG puis ENV (servi par /env.js)
+function getMapsApiKey() {
+  const k1 = (window.CONFIG && window.CONFIG.GOOGLE_MAPS_API_KEY) || '';
+  const k2 = (window.ENV && window.ENV.GOOGLE_MAPS_API_KEY) || '';
+  return k1 || k2 || '';
 }
 
-// ---------- Autocomplete pour un <input> ----------
+/* ----------------- Autocomplete ----------------- */
+
 function attachAutocomplete(input) {
   if (!input || input.__ac) return;
   if (!(window.google && google.maps && google.maps.places)) return;
@@ -25,7 +30,7 @@ function attachAutocomplete(input) {
   const opts = {
     types: ['geocode'], // adresses & villes
     componentRestrictions: { country: ['fr'] },
-    fields: ['formatted_address','geometry','address_components'],
+    fields: ['formatted_address', 'geometry', 'address_components'],
   };
 
   input.setAttribute('autocomplete', 'off');
@@ -42,16 +47,15 @@ function attachAutocomplete(input) {
         const pickup = document.getElementById('transportAddressPickup');
         if (pickup) pickup.value = input.value;
         const modeSel = document.getElementById('transportMode');
-        if (modeSel) { modeSel.value = 'baryc'; modeSel.dispatchEvent(new Event('change',{bubbles:true})); }
+        if (modeSel) { modeSel.value = 'baryc'; modeSel.dispatchEvent(new Event('change', { bubbles: true })); }
       }
     }
 
-    // recalcul de distance après saisie d'une adresse
+    // Recalcul après une adresse
     computeDistance(recomputeCb);
   });
 }
 
-// ---------- Attache tous les inputs concernés ----------
 function setupAllInputs() {
   const client   = document.getElementById('clientAddressMain');
   const pickup   = document.getElementById('transportAddressPickup');
@@ -79,33 +83,50 @@ function setupAllInputs() {
   });
 }
 
-// ---------- Callback global pour l'API Google ----------
+/* ----------------- Google callback ----------------- */
+
 window.__mapsInit = function () {
   mapsLoaded = true;
   setupAllInputs();
 };
 
-// ---------- Charge l'API Google Maps Places (sans doublons) ----------
+/* ----------------- Load Google Maps (Places) ----------------- */
+
 export function loadGoogleMaps() {
   if (mapsLoaded || loading) return;
-  if (document.getElementById('gmap-places-script')) return; // déjà injecté
-  loading = true;
 
-  const key = getMapsKey();
+  // supprime un éventuel script injecté précédemment (évite les états “bloqués”)
+  const existing = document.getElementById('gmap-places-script');
+  if (existing) existing.remove();
+
+  const key = getMapsApiKey();
   if (!key) {
-    console.warn('[maps] GOOGLE_MAPS_API_KEY manquante (window.ENV.GOOGLE_MAPS_API_KEY). Charge quand même sans clé → échec probable.');
+    console.error('[maps] Aucune clé Google Maps détectée. Renseigne CONFIG.GOOGLE_MAPS_API_KEY ou PUBLIC_GOOGLE_MAPS_API_KEY (via /env.js).');
+    return;
   }
 
+  loading = true;
   const s = document.createElement('script');
   s.id = 'gmap-places-script';
   s.src = `https://maps.googleapis.com/maps/api/js?key=${encodeURIComponent(key)}&libraries=places&language=fr&region=FR&callback=__mapsInit`;
   s.async = true;
   s.defer = true;
-  s.onerror = () => console.error('[maps] Google Maps failed to load');
+  s.onerror = () => {
+    loading = false;
+    console.error('[maps] Échec de chargement Google Maps. Vérifie : clé valide, restrictions HTTP referrer, APIs activées (Maps JavaScript + Places), et facturation.');
+  };
   document.head.appendChild(s);
+
+  // Failsafe : si pas d’init sous 10s, on log un hint
+  setTimeout(() => {
+    if (!mapsLoaded && !(window.google && google.maps && google.maps.places)) {
+      console.warn('[maps] Google Maps non initialisé. Causes probables: referer non autorisé, API Places non activée, ou facturation.');
+    }
+  }, 10000);
 }
 
-// ---------- Bindings UI + intégration au recompute global ----------
+/* ----------------- Bindings UI ----------------- */
+
 export function initMapsBindings(onChange) {
   recomputeCb = typeof onChange === 'function' ? onChange : null;
 
@@ -121,15 +142,13 @@ export function initMapsBindings(onChange) {
   const deliveryDifferent   = document.getElementById('deliveryDifferent');
   const deliveryWrap        = document.getElementById('deliveryAddressWrap');
 
-  // --- Synchro Admin: adresse de référence / barème km
+  // Synchro Admin: adresse de référence / barème km
   window.addEventListener('admin:transport-updated', () => {
-    // si pickup est vide, on le pré-remplit avec l'origine société
     const pickupEl = document.getElementById('transportAddressPickup');
     const origin = getCompanyOrigin();
     if (pickupEl && !pickupEl.value.trim() && origin) {
       pickupEl.value = origin;
     }
-    // si mode baryc + pas manuel → calcule; sinon juste recompute()
     const isManual = !!manualToggle?.checked;
     const isBaryc  = (modeSel?.value || state?.transport?.mode) === 'baryc';
     if (isBaryc && !isManual) {
@@ -139,7 +158,7 @@ export function initMapsBindings(onChange) {
     }
   }, { passive: true });
 
-  // --- Saisie manuelle distance
+  // Saisie manuelle distance
   if (manualToggle && distanceManual && distanceAutoBlock && !manualToggle.__bound) {
     manualToggle.__bound = true;
 
@@ -168,20 +187,20 @@ export function initMapsBindings(onChange) {
     });
   }
 
-  // --- Bouton "Recalculer avec Google"
+  // Bouton "Recalculer avec Google"
   if (recalcBtn && !recalcBtn.__bound) {
     recalcBtn.__bound = true;
     recalcBtn.addEventListener('click', () => computeDistance(recomputeCb));
   }
 
-  // --- Sélecteur de mode transport
+  // Sélecteur de mode transport
   if (modeSel && !modeSel.__bound) {
     modeSel.__bound = true;
     modeSel.addEventListener('change', () => {
       const val = modeSel.value;
 
       if (val === 'client') {
-        // Transport par le client → km = 0
+        // Transport client → km = 0
         state.transport.mode = 'client';
         state.transport.pickKm = 0;
         state.transport.dropKm = 0;
@@ -200,7 +219,7 @@ export function initMapsBindings(onChange) {
           refreshDistanceUI();
           recomputeCb && recomputeCb();
         } else {
-          // pré-remplit l'origine si besoin
+          // Pré-remplit l'origine si besoin
           const pickupEl = document.getElementById('transportAddressPickup');
           if (pickupEl && !pickupEl.value.trim()) {
             const origin = getCompanyOrigin();
@@ -212,7 +231,7 @@ export function initMapsBindings(onChange) {
     });
   }
 
-  // --- "Utiliser l’adresse client comme adresse de récupération"
+  // "Utiliser l’adresse client comme adresse de récupération"
   if (sameAsClient && !sameAsClient.__bound) {
     sameAsClient.__bound = true;
     sameAsClient.addEventListener('change', () => {
@@ -220,13 +239,13 @@ export function initMapsBindings(onChange) {
       const pickup = document.getElementById('transportAddressPickup');
       if (sameAsClient.checked && client && pickup) {
         pickup.value = client.value;
-        if (modeSel) { modeSel.value = 'baryc'; modeSel.dispatchEvent(new Event('change',{bubbles:true})); }
+        if (modeSel) { modeSel.value = 'baryc'; modeSel.dispatchEvent(new Event('change', { bubbles: true })); }
         computeDistance(recomputeCb);
       }
     });
   }
 
-  // --- "Adresse de livraison différente"
+  // "Adresse de livraison différente"
   if (deliveryDifferent && !deliveryDifferent.__bound) {
     deliveryDifferent.__bound = true;
     deliveryDifferent.addEventListener('change', () => {
@@ -241,11 +260,10 @@ export function initMapsBindings(onChange) {
     });
   }
 
-  // --- Premier état
+  // Premier état
   const isManual = !!manualToggle?.checked;
   const isBaryc  = (modeSel?.value || state?.transport?.mode) === 'baryc';
   if (isBaryc && !isManual) {
-    // pré-remplit l'origine si besoin
     const pickupEl = document.getElementById('transportAddressPickup');
     if (pickupEl && !pickupEl.value.trim()) {
       const origin = getCompanyOrigin();
