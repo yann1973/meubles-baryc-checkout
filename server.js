@@ -52,6 +52,18 @@ app.get('/env.js', (_req, res) => {
     );
 });
 
+
+
+
+
+
+
+
+
+
+
+
+
 // ---------- Static: assets dédiés (AVANT tout) ----------
 // IMPORTANT: fallthrough:false => un asset manquant retourne 404 (et pas index.html)
 const ASSET_OPTS = {
@@ -67,6 +79,28 @@ const ASSET_OPTS = {
 app.use('/js', express.static(path.join(__dirname, 'public', 'js'), ASSET_OPTS));
 app.use('/css', express.static(path.join(__dirname, 'public', 'css'), ASSET_OPTS));
 app.use('/img', express.static(path.join(__dirname, 'public', 'img'), ASSET_OPTS));
+
+
+
+
+
+// Désactive le cache pour les JS de config et les partials HTML
+app.use((req, res, next) => {
+  if (req.path.startsWith('/js/config/')) {
+    res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+    res.setHeader('Pragma', 'no-cache');
+    res.setHeader('Expires', '0');
+  }
+  if (req.path.startsWith('/partials/')) {
+    res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+    res.setHeader('Pragma', 'no-cache');
+    res.setHeader('Expires', '0');
+  }
+  next();
+});
+
+
+
 
 // ---------- Static: répertoire public (sans bloquer le catch-all) ----------
 app.use(
