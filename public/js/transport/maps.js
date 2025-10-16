@@ -3,22 +3,28 @@ import { PRICING } from '/js/devis/constants.js';
 import { computeDistance, refreshDistanceUI } from './distance.js';
 import { state } from '../state.js';
 
-let mapsLoaded = false;
-let loading = false;
-let recomputeCb = null;
+let mapsLoaded   = false;
+let loading      = false;
+let recomputeCb  = null;
+let lastKeyUsed  = '';   // pour éviter de recharger si même clé
+const SCRIPT_ID  = 'gmap-places-script';
 
 /* ----------------- Helpers config ----------------- */
 
-// Origine "société" (modifiable via l’onglet CR avec applyConfig)
+// Adresse d’origine “société” (modifiable via l’onglet CR / applyConfig)
 function getCompanyOrigin() {
   return PRICING?.transport?.baseAddress || '';
 }
 
-// Clé Google : CONFIG puis ENV (servi par /env.js)
+// Clé Google Maps : on regarde d’abord window.ENV (servi par /env.js) puis window.CONFIG
 function getMapsApiKey() {
-  const k1 = (window.CONFIG && window.CONFIG.GOOGLE_MAPS_API_KEY) || '';
-  const k2 = (window.ENV && window.ENV.GOOGLE_MAPS_API_KEY) || '';
-  return k1 || k2 || '';
+  const fromEnv = (window.ENV && window.ENV.GOOGLE_MAPS_API_KEY) || '';
+  const fromCfg = (window.CONFIG && window.CONFIG.GOOGLE_MAPS_API_KEY) || '';
+  return fromEnv || fromCfg || '';
+}
+
+function buildMapsSrc(key) {
+  return `https://maps.googleapis.com/maps/api/js?key=${encodeURIComponent(key)}&libraries=places&language=fr&region=FR&callback=__mapsInit`;
 }
 
 /* ----------------- Autocomplete ----------------- */
@@ -47,7 +53,10 @@ function attachAutocomplete(input) {
         const pickup = document.getElementById('transportAddressPickup');
         if (pickup) pickup.value = input.value;
         const modeSel = document.getElementById('transportMode');
-        if (modeSel) { modeSel.value = 'baryc'; modeSel.dispatchEvent(new Event('change', { bubbles: true })); }
+        if (modeSel) {
+          modeSel.value = 'baryc';
+          modeSel.dispatchEvent(new Event('change', { bubbles: true }));
+        }
       }
     }
 
@@ -63,11 +72,11 @@ function setupAllInputs() {
 
   [client, pickup, delivery].forEach(el => attachAutocomplete(el));
 
-  // Auto-attach au focus (si la lib se charge après)
+  // Auto-attach au focus (au cas où la lib se charge après)
   [client, pickup, delivery].forEach(el => {
     if (!el || el.__focusBound) return;
     el.__focusBound = true;
-    el.addEventListener('focus', () => attachAutocomplete(el));
+    el.addEventListener('focus', () => attachAutocomplete(el), { passive: true });
   });
 
   // Recalcule si l’utilisateur valide sans choisir une suggestion
@@ -83,69 +92,79 @@ function setupAllInputs() {
   });
 }
 
-/* ----------------- Google callback ----------------- */
+/* ----------------- Callback Google ----------------- */
 
+// Doit être globale pour le callback de l’API
 window.__mapsInit = function () {
   mapsLoaded = true;
+  loading = false;
   setupAllInputs();
 };
 
-/* ----------------- Load Google Maps (Places) ----------------- */
+/* ----------------- Chargement de l’API Google (Places) ----------------- */
 
 export function loadGoogleMaps() {
-  if (mapsLoaded || loading) return;
-
-  // supprime un éventuel script injecté précédemment (évite les états “bloqués”)
-  const existing = document.getElementById('gmap-places-script');
-  if (existing) existing.remove();
-
+  // clé
   const key = getMapsApiKey();
   if (!key) {
-    console.error('[maps] Aucune clé Google Maps détectée. Renseigne CONFIG.GOOGLE_MAPS_API_KEY ou PUBLIC_GOOGLE_MAPS_API_KEY (via /env.js).');
-    return;
+    console.error('[maps] Aucune clé Google Maps détectée. Renseigne PUBLIC_GOOGLE_MAPS_API_KEY (via /env.js) ou CONFIG.GOOGLE_MAPS_API_KEY.');
+    return; // on n’essaie pas de charger sans clé
   }
 
+  // si déjà chargé avec la même clé, inutile d’en refaire plus
+  if (mapsLoaded && lastKeyUsed === key) return;
+
+  // si un script existe mais change de clé → on le remplace
+  const existing = document.getElementById(SCRIPT_ID);
+  if (existing) existing.remove();
+
+  // si un chargement est en cours et pour la même clé, on ne double pas
+  if (loading && lastKeyUsed === key) return;
+
   loading = true;
+  lastKeyUsed = key;
+
   const s = document.createElement('script');
-  s.id = 'gmap-places-script';
-  s.src = `https://maps.googleapis.com/maps/api/js?key=${encodeURIComponent(key)}&libraries=places&language=fr&region=FR&callback=__mapsInit`;
+  s.id = SCRIPT_ID;
+  s.src = buildMapsSrc(key);
   s.async = true;
   s.defer = true;
   s.onerror = () => {
     loading = false;
-    console.error('[maps] Échec de chargement Google Maps. Vérifie : clé valide, restrictions HTTP referrer, APIs activées (Maps JavaScript + Places), et facturation.');
+    console.error('[maps] Échec de chargement Google Maps. Vérifie la clé, les restrictions HTTP referrer, les APIs activées (Maps JavaScript + Places) et la facturation.');
   };
   document.head.appendChild(s);
 
-  // Failsafe : si pas d’init sous 10s, on log un hint
+  // Failsafe : si pas d’init sous 10s, log d’aide
   setTimeout(() => {
     if (!mapsLoaded && !(window.google && google.maps && google.maps.places)) {
-      console.warn('[maps] Google Maps non initialisé. Causes probables: referer non autorisé, API Places non activée, ou facturation.');
+      console.warn('[maps] Google Maps non initialisé. Causes probables : referer non autorisé, API Places non activée, clé invalide ou facturation.');
     }
   }, 10000);
 }
 
-/* ----------------- Bindings UI ----------------- */
+/* ----------------- Bindings UI + intégration au recalcul ----------------- */
 
 export function initMapsBindings(onChange) {
   recomputeCb = typeof onChange === 'function' ? onChange : null;
 
+  // charge l’API + tente l’attach des inputs (si la lib arrive après, on ré-attache au focus)
   loadGoogleMaps();
   setupAllInputs();
 
-  const manualToggle        = document.getElementById('manualDistanceToggle');
-  const distanceManual      = document.getElementById('distanceManual');
-  const distanceAutoBlock   = document.getElementById('distanceAutoBlock');
-  const recalcBtn           = document.getElementById('recalcDistance');
-  const modeSel             = document.getElementById('transportMode');
-  const sameAsClient        = document.getElementById('sameAsClient');
-  const deliveryDifferent   = document.getElementById('deliveryDifferent');
-  const deliveryWrap        = document.getElementById('deliveryAddressWrap');
+  const manualToggle      = document.getElementById('manualDistanceToggle');
+  const distanceManual    = document.getElementById('distanceManual');
+  const distanceAutoBlock = document.getElementById('distanceAutoBlock');
+  const recalcBtn         = document.getElementById('recalcDistance');
+  const modeSel           = document.getElementById('transportMode');
+  const sameAsClient      = document.getElementById('sameAsClient');
+  const deliveryDifferent = document.getElementById('deliveryDifferent');
+  const deliveryWrap      = document.getElementById('deliveryAddressWrap');
 
   // Synchro Admin: adresse de référence / barème km
   window.addEventListener('admin:transport-updated', () => {
     const pickupEl = document.getElementById('transportAddressPickup');
-    const origin = getCompanyOrigin();
+    const origin   = getCompanyOrigin();
     if (pickupEl && !pickupEl.value.trim() && origin) {
       pickupEl.value = origin;
     }
@@ -200,7 +219,7 @@ export function initMapsBindings(onChange) {
       const val = modeSel.value;
 
       if (val === 'client') {
-        // Transport client → km = 0
+        // Transport par le client → km = 0
         state.transport.mode = 'client';
         state.transport.pickKm = 0;
         state.transport.dropKm = 0;
@@ -211,10 +230,9 @@ export function initMapsBindings(onChange) {
         // Par nos soins → recalcule (ou conserve la valeur manuelle)
         state.transport.mode = 'baryc';
         const manualOn    = !!manualToggle?.checked;
-        const manualInput = distanceManual;
 
         if (manualOn) {
-          const n = Number(manualInput?.value || 0);
+          const n = Number(distanceManual?.value || 0);
           state.transport.distanceKm = Number.isFinite(n) ? n : 0;
           refreshDistanceUI();
           recomputeCb && recomputeCb();
@@ -239,7 +257,10 @@ export function initMapsBindings(onChange) {
       const pickup = document.getElementById('transportAddressPickup');
       if (sameAsClient.checked && client && pickup) {
         pickup.value = client.value;
-        if (modeSel) { modeSel.value = 'baryc'; modeSel.dispatchEvent(new Event('change', { bubbles: true })); }
+        if (modeSel) {
+          modeSel.value = 'baryc';
+          modeSel.dispatchEvent(new Event('change', { bubbles: true }));
+        }
         computeDistance(recomputeCb);
       }
     });
