@@ -1,35 +1,62 @@
 // public/js/config/apply.js
-import { PRICING } from '/js/devis/constants.js';
 import { loadConfig, saveConfig } from './storage.js';
-import { EVENTS, emit } from '/js/common/events.js';
+import { PRICING } from '/js/devis/constants.js';
 
-const num = (v) => (Number.isFinite(Number(v)) ? Number(v) : 0);
+// Applique la config au runtime (prix, prestations, transport) + events de synchro
+export function applyConfig(cfg = {}) {
+  if (!cfg || typeof cfg !== 'object') return;
 
-export function applyConfig(cfg) {
-  // 1) Prestations + PV TTC /m²
-  PRICING.meta = PRICING.meta || {};
-  PRICING.meta.services = (cfg.services || []).map(({ key, label }) => ({ key, label }));
-  PRICING.servicesTTC = {};
-  for (const s of (cfg.services || [])) PRICING.servicesTTC[s.key] = num(s.pvTTC);
+  // Prestations (catalogue affiché dans Devis + CR)
+  if (Array.isArray(cfg.services)) {
+    PRICING.meta = PRICING.meta || {};
+    PRICING.meta.services = cfg.services.map(s => ({
+      key: s.key,
+      label: s.label ?? s.key
+    }));
+    // pour info (utile au CR)
+    window.dispatchEvent(new Event('admin:services-updated'));
+  }
 
-  // 2) Coûts €/m²
-  PRICING.costs = PRICING.costs || {};
-  PRICING.costs.servicesM2 = { ...(PRICING.costs.servicesM2 || {}), ...(cfg.costsM2 || {}) };
+  // Prix de vente au m² (utilisés par computePricing et l’UI Devis)
+  if (cfg.servicesTTC && typeof cfg.servicesTTC === 'object') {
+    PRICING.servicesTTC = { ...(PRICING.servicesTTC || {}), ...cfg.servicesTTC };
+    window.dispatchEvent(new Event('admin:services-updated'));
+  }
 
-  // 3) Transport
-  PRICING.transport = PRICING.transport || {};
-  PRICING.transport.baseAddress = cfg.transport?.baseAddress || '';
-  PRICING.transport.kmRate = num(cfg.transport?.kmRate);
+  // Coûts de revient au m² (utilisés dans l’onglet CR)
+  if (cfg.costs?.servicesM2 && typeof cfg.costs.servicesM2 === 'object') {
+    PRICING.costs = PRICING.costs || {};
+    PRICING.costs.servicesM2 = {
+      ...(PRICING.costs.servicesM2 || {}),
+      ...cfg.costs.servicesM2
+    };
+    window.dispatchEvent(new Event('admin:services-updated'));
+  }
 
-  // 4) Events (UI live)
-  emit(EVENTS.ADMIN_SERVICES_UPDATED,  { cfg });
-  emit(EVENTS.ADMIN_PRICING_UPDATED,   { cfg });
-  emit(EVENTS.ADMIN_TRANSPORT_UPDATED, { cfg });
+  // Transport: adresse de référence + barème
+  if (cfg.transport && typeof cfg.transport === 'object') {
+    PRICING.transport = { ...(PRICING.transport || {}), ...cfg.transport };
+    window.dispatchEvent(new Event('admin:transport-updated'));
+  }
 }
 
-export function updateConfig(mutator) {
-  const cfg = loadConfig();
-  mutator(cfg);
-  saveConfig(cfg);
-  applyConfig(cfg);
+// Merge + persistance + application immédiate
+export function updateConfig(patch = {}) {
+  const cur = loadConfig();
+  const next = deepMerge(cur, patch);
+  saveConfig(next);
+  applyConfig(next);
+  return next;
+}
+
+// petit merge récursif
+function deepMerge(a, b) {
+  const out = Array.isArray(a) ? [...a] : { ...a };
+  for (const [k, v] of Object.entries(b || {})) {
+    out[k] =
+      v && typeof v === 'object' && !Array.isArray(v)
+        ? deepMerge(a?.[k] || {}, v)
+        : v;
+  }
+  return out;
 }
