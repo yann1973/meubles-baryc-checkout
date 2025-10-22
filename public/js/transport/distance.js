@@ -2,20 +2,17 @@
 import { PRICING } from '/js/devis/constants.js';
 import { state } from '../state.js';
 
-// Helper DOM
 const $ = (id) => document.getElementById(id);
+const round1 = (n) => Math.round(Number(n || 0) * 10) / 10;
 
-// Adresse de référence (atelier)
 function getBase() {
   return (PRICING?.transport?.baseAddress || '13 Rue du Cabotage, 56700 Hennebont, France').trim();
 }
 
-/** Met à jour l'affichage de la distance (auto ou manuel) */
 export function refreshDistanceUI() {
   const autoBlock    = $('distanceAutoBlock');
   const manualToggle = $('manualDistanceToggle');
   const manualInput  = $('distanceManual');
-
   const km = Number(state?.transport?.distanceKm) || 0;
 
   if (manualToggle?.checked) {
@@ -28,7 +25,6 @@ export function refreshDistanceUI() {
   }
 }
 
-// --- Google DistanceMatrix promisifié (one-way) ---
 function dmOneWayKm(origin, destination) {
   return new Promise((resolve) => {
     if (!(window.google && google.maps && google.maps.DistanceMatrixService)) {
@@ -37,17 +33,11 @@ function dmOneWayKm(origin, destination) {
     }
     const svc = new google.maps.DistanceMatrixService();
     svc.getDistanceMatrix(
-      {
-        origins: [origin],
-        destinations: [destination],
-        travelMode: google.maps.TravelMode.DRIVING,
-        unitSystem: google.maps.UnitSystem.METRIC,
-      },
+      { origins:[origin], destinations:[destination], travelMode: google.maps.TravelMode.DRIVING, unitSystem: google.maps.UnitSystem.METRIC },
       (res, status) => {
         if (status === 'OK') {
           const el = res?.rows?.[0]?.elements?.[0];
-          const meters = el?.distance?.value ?? 0;
-          return resolve(meters / 1000);
+          return resolve((el?.distance?.value || 0) / 1000);
         }
         console.warn('[distance] DistanceMatrix status:', status);
         resolve(0);
@@ -56,66 +46,50 @@ function dmOneWayKm(origin, destination) {
   });
 }
 
-/**
- * Calcule la distance totale = RÉCUP A/R + LIVRAISON A/R.
- * - pickup = adresse récupération (sinon client si tu veux, mais ici c’est ce champ)
- * - delivery = adresse livraison ; si vide → on considère la même que pickup
- * - base = adresse de référence (atelier) depuis l’onglet CR
- * Appelle `callback()` après mise à jour pour déclencher un recompute global.
- */
 export async function computeDistance(callback) {
   const manualToggle = $('manualDistanceToggle');
   const manualInput  = $('distanceManual');
+  if (!state.transport) state.transport = { mode:'client', distanceKm:0, pickKm:0, dropKm:0 };
 
-  // 0) init transport state
-  if (!state.transport) {
-    state.transport = { mode: 'client', distanceKm: 0, pickKm: 0, dropKm: 0 };
-  }
+  const base     = getBase();
+  const pickupEl = $('transportAddressPickup');
+  const delivEl  = $('transportAddressDelivery');
+  const pickup   = (pickupEl?.value || '').trim();
+  const delivery = (delivEl?.value  || pickup).trim();
 
-  // 1) Mode MANUEL
+  // Mode MANUEL
   if (manualToggle?.checked) {
-    const v = Number(manualInput?.value || 0);
-    state.transport.distanceKm = Number.isFinite(v) ? v : 0;
-    // détail explicite même en manuel
-    const total = state.transport.distanceKm;
-    state.transport.detail =
-      `Distance saisie manuellement — Total ≈ ${total.toFixed(1)} km`;
+    const total = round1(manualInput?.value || 0);
+    state.transport.distanceKm  = total;
+    state.transport.detail      = `Distance saisie manuellement — Total ≈ ${total.toFixed(1)} km`;
+    state.transport.detailParts = { base, pickup, delivery, pickARKm: 0, delARKm: 0, totalKm: total };
     refreshDistanceUI();
     if (typeof callback === 'function') callback();
     return;
   }
 
-  // 2) Mode AUTO (Google)
-  const base      = getBase();
-  const pickup    = ($('transportAddressPickup')?.value || '').trim();
-  // si pas de livraison différente → on livre au même endroit
-  const delivery  = ($('transportAddressDelivery')?.value || pickup).trim();
-
+  // Mode AUTO
   if (!base || !pickup) {
-    // pas assez d’infos -> 0
-    state.transport.distanceKm = 0;
-    state.transport.detail = 'Transport non calculé (adresse de récupération manquante).';
+    state.transport.distanceKm  = 0;
+    state.transport.detail      = 'Transport non calculé (adresse de récupération manquante).';
+    state.transport.detailParts = { base, pickup, delivery, pickARKm: 0, delARKm: 0, totalKm: 0 };
     refreshDistanceUI();
     if (typeof callback === 'function') callback();
     return;
   }
 
-  // 2 appels one-way : base→pickup et base→delivery
   const [toPick, toDel] = await Promise.all([
     dmOneWayKm(base, pickup),
     dmOneWayKm(base, delivery || pickup),
   ]);
 
-  // total = 2 A/R = 2*(base<->pickup) + 2*(base<->delivery)
-  const pickAR = 2 * toPick;
-  const delAR  = 2 * toDel;
-  const total  = pickAR + delAR;
+  const pickAR = round1(2 * toPick);
+  const delAR  = round1(2 * toDel);
+  const total  = round1(pickAR + delAR);
 
-  state.transport.distanceKm = Math.round(total * 10) / 10;
-  state.transport.detail =
-    `Récupération A/R: ${pickAR.toFixed(1)} km — ` +
-    `Livraison A/R: ${delAR.toFixed(1)} km — ` +
-    `Total: ${state.transport.distanceKm.toFixed(1)} km`;
+  state.transport.distanceKm  = total;
+  state.transport.detail      = `Récupération A/R: ${pickAR.toFixed(1)} km — Livraison A/R: ${delAR.toFixed(1)} km — Total: ${total.toFixed(1)} km`;
+  state.transport.detailParts = { base, pickup, delivery, pickARKm: pickAR, delARKm: delAR, totalKm: total };
 
   refreshDistanceUI();
   if (typeof callback === 'function') callback();
