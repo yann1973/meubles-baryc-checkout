@@ -5,8 +5,10 @@ import { state } from '../state.js';
 // Helper DOM
 const $ = (id) => document.getElementById(id);
 
-// Barème €/km (vient de l’onglet CR via applyConfig) — conservé si tu veux l’afficher
-const kmRate = () => Number(PRICING?.transport?.kmRate) || 0;
+// Adresse de référence (atelier)
+function getBase() {
+  return (PRICING?.transport?.baseAddress || '13 Rue du Cabotage, 56700 Hennebont, France').trim();
+}
 
 /** Met à jour l'affichage de la distance (auto ou manuel) */
 export function refreshDistanceUI() {
@@ -24,121 +26,97 @@ export function refreshDistanceUI() {
     autoBlock?.classList.remove('hidden');
     if (autoBlock) autoBlock.textContent = `${km.toFixed(1)} km`;
   }
-
-  // // Si tu veux afficher le coût transport TTC, dé-commente :
-  // const elCost = $('transportCost');
-  // if (elCost) {
-  //   const costTTC = km * kmRate();
-  //   elCost.textContent = new Intl.NumberFormat('fr-FR',{ style:'currency', currency:'EUR' }).format(costTTC);
-  // }
 }
 
-/**
- * Calcule la distance totale:
- *  - si "manuel" => lit le champ et met à jour state.transport.distanceKm
- *  - sinon => via Google DistanceMatrix, mais seulement si mode = 'baryc'
- *  total = (base↔pickup) A/R + (base↔delivery) A/R (si livraison différente)
- * Appelle `callback()` après mise à jour pour déclencher un recompute global.
- */
-export function computeDistance(callback) {
-  // sécurité: conteneur transport
-  if (!state.transport) {
-    state.transport = { mode: 'client', pickKm: 0, dropKm: 0, distanceKm: 0 };
-  }
-
-  const manualToggle = $('manualDistanceToggle');
-  const manualInput  = $('distanceManual');
-  const modeSel      = $('transportMode');
-  const mode         = (modeSel?.value || state.transport.mode || 'client');
-
-  // 1) Mode manuel prioritaire
-  if (manualToggle?.checked) {
-    const v = Number(manualInput?.value || 0);
-    state.transport.distanceKm = Number.isFinite(v) ? v : 0;
-    // on ne touche pas pickKm/dropKm en manuel
-    refreshDistanceUI();
-    if (typeof callback === 'function') callback();
-    return;
-  }
-
-  // 2) Transport par le client → pas de calcul, 0 km
-  if (mode !== 'baryc') {
-    state.transport.pickKm = 0;
-    state.transport.dropKm = 0;
-    state.transport.distanceKm = 0;
-    refreshDistanceUI();
-    if (typeof callback === 'function') callback();
-    return;
-  }
-
-  // 3) Mode baryc (par nos soins) → DistanceMatrix
-  const pickupEl     = $('transportAddressPickup');
-  const deliveryEl   = $('transportAddressDelivery');
-  const deliveryDiff = !!$('deliveryDifferent')?.checked;
-
-  const base      = (PRICING?.transport?.baseAddress || '').trim();
-  const pickup    = (pickupEl?.value || '').trim();
-  const delivery  = deliveryDiff ? (deliveryEl?.value || '').trim() : '';
-
-  // besoin a minima de base + pickup
-  if (!base || !pickup) {
-    state.transport.pickKm = 0;
-    state.transport.dropKm = 0;
-    state.transport.distanceKm = 0;
-    refreshDistanceUI();
-    if (typeof callback === 'function') callback();
-    return;
-  }
-
-  // Google API prête ?
-  if (!(window.google && google.maps && google.maps.DistanceMatrixService)) {
-    console.warn('[distance] Google API non disponible; conserve la distance courante');
-    refreshDistanceUI();
-    if (typeof callback === 'function') callback();
-    return;
-  }
-
-  const svc = new google.maps.DistanceMatrixService();
-
-  // helper: aller-retour base↔dest en km
-  const kmRoundTrip = (origin, dest) => new Promise((resolve) => {
-    if (!origin || !dest) return resolve(0);
+// --- Google DistanceMatrix promisifié (one-way) ---
+function dmOneWayKm(origin, destination) {
+  return new Promise((resolve) => {
+    if (!(window.google && google.maps && google.maps.DistanceMatrixService)) {
+      console.warn('[distance] Google API indisponible -> 0 km (fallback)');
+      return resolve(0);
+    }
+    const svc = new google.maps.DistanceMatrixService();
     svc.getDistanceMatrix(
       {
         origins: [origin],
-        destinations: [dest],
+        destinations: [destination],
         travelMode: google.maps.TravelMode.DRIVING,
         unitSystem: google.maps.UnitSystem.METRIC,
       },
       (res, status) => {
-        if (status !== 'OK' ||
-            !res?.rows?.[0]?.elements?.[0] ||
-            res.rows[0].elements[0].status !== 'OK') {
-          console.warn('[distance] status:', status, res?.rows?.[0]?.elements?.[0]?.status);
-          return resolve(0);
+        if (status === 'OK') {
+          const el = res?.rows?.[0]?.elements?.[0];
+          const meters = el?.distance?.value ?? 0;
+          return resolve(meters / 1000);
         }
-        const meters   = res.rows[0].elements[0].distance?.value || 0;
-        const kmOneWay = meters / 1000;
-        resolve(Math.round(kmOneWay * 2 * 10) / 10); // A/R arrondi 0.1
+        console.warn('[distance] DistanceMatrix status:', status);
+        resolve(0);
       }
     );
   });
+}
 
-  (async () => {
-    try {
-      const pickAR = await kmRoundTrip(base, pickup);          // base↔pickup A/R
-      const dropAR = delivery ? await kmRoundTrip(base, delivery) : 0; // base↔delivery A/R si différent
+/**
+ * Calcule la distance totale = RÉCUP A/R + LIVRAISON A/R.
+ * - pickup = adresse récupération (sinon client si tu veux, mais ici c’est ce champ)
+ * - delivery = adresse livraison ; si vide → on considère la même que pickup
+ * - base = adresse de référence (atelier) depuis l’onglet CR
+ * Appelle `callback()` après mise à jour pour déclencher un recompute global.
+ */
+export async function computeDistance(callback) {
+  const manualToggle = $('manualDistanceToggle');
+  const manualInput  = $('distanceManual');
 
-      state.transport.pickKm     = pickAR;
-      state.transport.dropKm     = dropAR;
-      state.transport.distanceKm = (pickAR + dropAR) || 0;
+  // 0) init transport state
+  if (!state.transport) {
+    state.transport = { mode: 'client', distanceKm: 0, pickKm: 0, dropKm: 0 };
+  }
 
-    } catch (e) {
-      console.warn('[distance] échec DistanceMatrix:', e);
-      // on laisse la valeur courante si erreur
-    } finally {
-      refreshDistanceUI();
-      if (typeof callback === 'function') callback();
-    }
-  })();
+  // 1) Mode MANUEL
+  if (manualToggle?.checked) {
+    const v = Number(manualInput?.value || 0);
+    state.transport.distanceKm = Number.isFinite(v) ? v : 0;
+    // détail explicite même en manuel
+    const total = state.transport.distanceKm;
+    state.transport.detail =
+      `Distance saisie manuellement — Total ≈ ${total.toFixed(1)} km`;
+    refreshDistanceUI();
+    if (typeof callback === 'function') callback();
+    return;
+  }
+
+  // 2) Mode AUTO (Google)
+  const base      = getBase();
+  const pickup    = ($('transportAddressPickup')?.value || '').trim();
+  // si pas de livraison différente → on livre au même endroit
+  const delivery  = ($('transportAddressDelivery')?.value || pickup).trim();
+
+  if (!base || !pickup) {
+    // pas assez d’infos -> 0
+    state.transport.distanceKm = 0;
+    state.transport.detail = 'Transport non calculé (adresse de récupération manquante).';
+    refreshDistanceUI();
+    if (typeof callback === 'function') callback();
+    return;
+  }
+
+  // 2 appels one-way : base→pickup et base→delivery
+  const [toPick, toDel] = await Promise.all([
+    dmOneWayKm(base, pickup),
+    dmOneWayKm(base, delivery || pickup),
+  ]);
+
+  // total = 2 A/R = 2*(base<->pickup) + 2*(base<->delivery)
+  const pickAR = 2 * toPick;
+  const delAR  = 2 * toDel;
+  const total  = pickAR + delAR;
+
+  state.transport.distanceKm = Math.round(total * 10) / 10;
+  state.transport.detail =
+    `Récupération A/R: ${pickAR.toFixed(1)} km — ` +
+    `Livraison A/R: ${delAR.toFixed(1)} km — ` +
+    `Total: ${state.transport.distanceKm.toFixed(1)} km`;
+
+  refreshDistanceUI();
+  if (typeof callback === 'function') callback();
 }
