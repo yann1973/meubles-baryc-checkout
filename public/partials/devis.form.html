@@ -204,6 +204,33 @@
         Une majoration logistique peut s’appliquer si plusieurs meubles sont regroupés dans une même commande.
       </p>
     </div>
+
+    <!-- Détail transport (calcul en direct) -->
+<div class="md:col-span-3 rounded-2xl border border-neutral-200 bg-white p-4 mt-3">
+  <h3 class="text-sm font-semibold mb-2">Détail du transport</h3>
+
+  <div class="text-sm space-y-1">
+    <div>
+      <span class="font-medium">Récupération A/R</span> :
+      <span data-t-detail="pickKm">—</span> km
+    </div>
+    <div>
+      <span class="font-medium">Livraison A/R</span> :
+      <span data-t-detail="delKm">—</span> km
+    </div>
+    <div>
+      <span class="font-medium">Total</span> :
+      <span data-t-detail="totalKm">—</span> km
+    </div>
+  </div>
+
+  <div class="text-[12px] text-neutral-500 mt-2 space-y-0.5">
+    <div>Atelier : <span data-t-detail="atelier">—</span></div>
+    <div>Récupération : <span data-t-detail="pickup">—</span></div>
+    <div data-t-detail-line="delivery">Livraison : <span data-t-detail="delivery">—</span></div>
+  </div>
+</div>
+
   </div>
 
   <div class="mt-2 text-sm">

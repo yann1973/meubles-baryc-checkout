@@ -2,63 +2,94 @@
 import { euro } from '/js/common/dom.js';
 import { state } from '/js/state.js';
 
-const esc = (s='') => String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const set = (id, txt) => { const el = document.getElementById(id); if (el) el.textContent = txt; };
+const setAll = (selector, txt) => { document.querySelectorAll(selector).forEach(el => { el.textContent = txt; }); };
+const show = (id, visible) => { const el = document.getElementById(id); if (el) el.classList.toggle('hidden', !visible); };
+
+// helpers pour le bloc Transport du bas de page (data-attrs)
+const setDetail = (key, txt) => {
+  document.querySelectorAll(`[data-t-detail="${key}"]`).forEach(el => { el.textContent = txt; });
+};
+const showDetailLine = (key, visible) => {
+  document.querySelectorAll(`[data-t-detail-line="${key}"]`).forEach(el => { el.classList.toggle('hidden', !visible); });
+};
 
 export function renderTotals(pricing = {}) {
   const totals    = pricing?.totals    || {};
   const goods     = pricing?.goods     || {};
   const transport = pricing?.transport || {};
 
-  const surface    = Number(pricing?.totalSurface ?? 0) || 0;
-  const goodsHT    = Number(goods?.ht  ?? totals?.ht  ?? 0) || 0;
-  const goodsTVA   = Number(goods?.tva ?? totals?.tva ?? 0) || 0;
-  const goodsTTC   = Number(goods?.ttc ?? totals?.ttc ?? 0) || 0;
+  const surface      = Number(pricing?.totalSurface ?? 0) || 0;
+  const goodsHT      = Number(goods?.ht  ?? totals?.ht  ?? 0) || 0;
+  const goodsTVA     = Number(goods?.tva ?? totals?.tva ?? 0) || 0;
+  const goodsTTC     = Number(goods?.ttc ?? totals?.ttc ?? 0) || 0;
   const transportTTC = Number(transport?.ttc ?? transport?.totalTTC ?? 0) || 0;
-  const grandTTC   = goodsTTC + transportTTC;
+  const grandTTC     = goodsTTC + transportTTC;
 
-  const set = (id, txt) => { const el = document.getElementById(id); if (el) el.textContent = txt; };
-  const setAll = (selector, txt) => { document.querySelectorAll(selector).forEach(el => { el.textContent = txt; }); };
-
-  // Surface
+  // Surface (IDs + data-attrs)
   const surfTxt = `${surface.toFixed(2)} m²`;
   set('totalSurface',  surfTxt);
   set('surfaceDisplay',surfTxt);
   setAll('[data-surface]', surfTxt);
 
-  // Totaux
+  // Totaux (sidebar)
   set('prixHT',  euro(goodsHT));
   set('prixTVA', euro(goodsTVA));
   set('prixTTC', euro(grandTTC));
-
-  // Transport TTC
   set('prixTransport', euro(transportTTC));
 
-  // Info barème (si fournie ailleurs)
+  // Info barème si dispo
   const info = transport?.info || transport?.label || state?.transport?.info || '';
   set('transportTarifInfo', info);
 
-  // Détail explicite (2 A/R)
-  const detailEl = document.getElementById('recapTransportDetail');
-  if (detailEl) {
-    const d = state?.transport?.detailParts;
-    if (d) {
-      detailEl.innerHTML = `
-        <div class="text-xs text-neutral-700 space-y-1">
-          <div><span class="font-medium">Récupération A/R</span> : ${d.pickARKm.toFixed(1)} km</div>
-          <div><span class="font-medium">Livraison A/R</span> : ${d.delARKm.toFixed(1)} km</div>
-          <div><span class="font-medium">Total</span> : ${d.totalKm.toFixed(1)} km</div>
-          <div class="text-[11px] text-neutral-500 pt-1">
-            <div>Atelier : ${esc(d.base)}</div>
-            <div>Récupération : ${esc(d.pickup || '')}</div>
-            ${d.delivery && d.delivery !== d.pickup ? `<div>Livraison : ${esc(d.delivery)}</div>` : ''}
-          </div>
-        </div>`;
-    } else {
-      detailEl.textContent = transport?.detail || state?.transport?.detail || '';
-    }
+  // ---- Détail transport : sidebar (IDs existants) + section Transport (data-attrs) ----
+  const d = state?.transport?.detailParts;
+  if (d) {
+    const pickKm  = d.pickARKm?.toFixed ? d.pickARKm.toFixed(1) : '0.0';
+    const delKm   = d.delARKm?.toFixed  ? d.delARKm.toFixed(1)  : '0.0';
+    const totKm   = d.totalKm?.toFixed  ? d.totalKm.toFixed(1)  : '0.0';
+    const base    = d.base || '';
+    const pickup  = d.pickup || '';
+    const delivery= d.delivery || '';
+
+    // Sidebar (IDs)
+    set('recapTransportPickKm',  pickKm);
+    set('recapTransportDelKm',   delKm);
+    set('recapTransportTotalKm', totKm);
+    set('recapTransportAtelier', base);
+    set('recapTransportPickup',  pickup);
+    set('recapTransportDelivery',delivery);
+    const sameOrEmpty = !delivery || delivery === pickup;
+    show('recapTransportDeliveryLine', !sameOrEmpty);
+
+    // Section Transport (data-attrs)
+    setDetail('pickKm',  pickKm);
+    setDetail('delKm',   delKm);
+    setDetail('totalKm', totKm);
+    setDetail('atelier', base);
+    setDetail('pickup',  pickup);
+    setDetail('delivery',delivery);
+    showDetailLine('delivery', !sameOrEmpty);
+  } else {
+    // reset léger
+    set('recapTransportPickKm','—');
+    set('recapTransportDelKm','—');
+    set('recapTransportTotalKm','—');
+    set('recapTransportAtelier','—');
+    set('recapTransportPickup','—');
+    set('recapTransportDelivery','—');
+    show('recapTransportDeliveryLine', false);
+
+    setDetail('pickKm','—');
+    setDetail('delKm','—');
+    setDetail('totalKm','—');
+    setDetail('atelier','—');
+    setDetail('pickup','—');
+    setDetail('delivery','—');
+    showDetailLine('delivery', false);
   }
 
-  // Compat anciens IDs
+  // Compat anciens IDs + data-attrs
   set('totalHT',  euro(goodsHT));
   set('totalTVA', euro(goodsTVA));
   set('totalTTC', euro(goodsTTC));
@@ -81,22 +112,35 @@ export function renderTotals(pricing = {}) {
 }
 
 export function clearRecap() {
-  const zero  = (id) => { const el = document.getElementById(id); if (el) el.textContent = euro(0); };
-  const text  = (id, v) => { const el = document.getElementById(id); if (el) el.textContent = v; };
-  const setAll = (sel, v) => { document.querySelectorAll(sel).forEach(el => { el.textContent = v; }); };
+  const zero = (id) => { const el = document.getElementById(id); if (el) el.textContent = euro(0); };
+  const text = (id, v) => { const el = document.getElementById(id); if (el) el.textContent = v; };
 
-  text('totalSurface', '0,00 m²');
-  text('surfaceDisplay', '0,00 m²');
+  text('totalSurface','0,00 m²');
+  text('surfaceDisplay','0,00 m²');
   setAll('[data-surface]', '0,00 m²');
 
   zero('prixHT'); zero('prixTVA'); zero('prixTransport'); zero('prixTTC');
   text('transportTarifInfo', '');
-  const detailEl = document.getElementById('recapTransportDetail');
-  if (detailEl) detailEl.innerHTML = '';
 
+  set('recapTransportPickKm','—');
+  set('recapTransportDelKm','—');
+  set('recapTransportTotalKm','—');
+  set('recapTransportAtelier','—');
+  set('recapTransportPickup','—');
+  set('recapTransportDelivery','—');
+  show('recapTransportDeliveryLine', false);
+
+  setDetail('pickKm','—');
+  setDetail('delKm','—');
+  setDetail('totalKm','—');
+  setDetail('atelier','—');
+  setDetail('pickup','—');
+  setDetail('delivery','—');
+  showDetailLine('delivery', false);
+
+  // compat anciens
   zero('totalHT'); zero('totalTVA'); zero('totalTTC'); zero('goodsHT'); zero('goodsTTC');
-  zero('transportCost'); zero('transportSurcharge'); text('promoRate', '');
-
+  zero('transportCost'); zero('transportSurcharge'); text('promoRate','');
   setAll('[data-total="ht"]',  euro(0));
   setAll('[data-total="tva"]', euro(0));
   setAll('[data-total="ttc"]', euro(0));

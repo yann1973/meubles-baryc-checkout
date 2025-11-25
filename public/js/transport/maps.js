@@ -6,17 +6,15 @@ import { state } from '../state.js';
 let mapsLoaded   = false;
 let loading      = false;
 let recomputeCb  = null;
-let lastKeyUsed  = '';   // pour éviter de recharger si même clé
+let lastKeyUsed  = '';
 const SCRIPT_ID  = 'gmap-places-script';
 
 /* ----------------- Helpers config ----------------- */
 
-// Adresse d’origine “société” (modifiable via l’onglet CR / applyConfig)
 function getCompanyOrigin() {
   return PRICING?.transport?.baseAddress || '';
 }
 
-// Clé Google Maps : on regarde d’abord window.ENV (servi par /env.js) puis window.CONFIG
 function getMapsApiKey() {
   const fromEnv = (window.ENV && window.ENV.GOOGLE_MAPS_API_KEY) || '';
   const fromCfg = (window.CONFIG && window.CONFIG.GOOGLE_MAPS_API_KEY) || '';
@@ -34,7 +32,7 @@ function attachAutocomplete(input) {
   if (!(window.google && google.maps && google.maps.places)) return;
 
   const opts = {
-    types: ['geocode'], // adresses & villes
+    types: ['geocode'],
     componentRestrictions: { country: ['fr'] },
     fields: ['formatted_address', 'geometry', 'address_components'],
   };
@@ -46,7 +44,6 @@ function attachAutocomplete(input) {
     const place = input.__ac.getPlace();
     if (place?.formatted_address) input.value = place.formatted_address;
 
-    // Si l'adresse client change et que "même adresse" est coché → copie en récupération
     if (input.id === 'clientAddressMain') {
       const sameAsClient = document.getElementById('sameAsClient');
       if (sameAsClient?.checked) {
@@ -60,7 +57,6 @@ function attachAutocomplete(input) {
       }
     }
 
-    // Recalcul après une adresse
     computeDistance(recomputeCb);
   });
 }
@@ -72,14 +68,12 @@ function setupAllInputs() {
 
   [client, pickup, delivery].forEach(el => attachAutocomplete(el));
 
-  // Auto-attach au focus (au cas où la lib se charge après)
   [client, pickup, delivery].forEach(el => {
     if (!el || el.__focusBound) return;
     el.__focusBound = true;
     el.addEventListener('focus', () => attachAutocomplete(el), { passive: true });
   });
 
-  // Recalcule si l’utilisateur valide sans choisir une suggestion
   [client, pickup, delivery].forEach(el => {
     if (!el || el.__typingBound) return;
     el.__typingBound = true;
@@ -94,31 +88,26 @@ function setupAllInputs() {
 
 /* ----------------- Callback Google ----------------- */
 
-// Doit être globale pour le callback de l’API
 window.__mapsInit = function () {
   mapsLoaded = true;
   loading = false;
   setupAllInputs();
 };
 
-/* ----------------- Chargement de l’API Google (Places) ----------------- */
+/* ----------------- Chargement API Google ----------------- */
 
 export function loadGoogleMaps() {
-  // clé
   const key = getMapsApiKey();
   if (!key) {
     console.error('[maps] Aucune clé Google Maps détectée. Renseigne PUBLIC_GOOGLE_MAPS_API_KEY (via /env.js) ou CONFIG.GOOGLE_MAPS_API_KEY.');
-    return; // on n’essaie pas de charger sans clé
+    return;
   }
 
-  // si déjà chargé avec la même clé, inutile d’en refaire plus
   if (mapsLoaded && lastKeyUsed === key) return;
 
-  // si un script existe mais change de clé → on le remplace
   const existing = document.getElementById(SCRIPT_ID);
   if (existing) existing.remove();
 
-  // si un chargement est en cours et pour la même clé, on ne double pas
   if (loading && lastKeyUsed === key) return;
 
   loading = true;
@@ -135,7 +124,6 @@ export function loadGoogleMaps() {
   };
   document.head.appendChild(s);
 
-  // Failsafe : si pas d’init sous 10s, log d’aide
   setTimeout(() => {
     if (!mapsLoaded && !(window.google && google.maps && google.maps.places)) {
       console.warn('[maps] Google Maps non initialisé. Causes probables : referer non autorisé, API Places non activée, clé invalide ou facturation.');
@@ -143,12 +131,11 @@ export function loadGoogleMaps() {
   }, 10000);
 }
 
-/* ----------------- Bindings UI + intégration au recalcul ----------------- */
+/* ----------------- Bindings UI ----------------- */
 
 export function initMapsBindings(onChange) {
   recomputeCb = typeof onChange === 'function' ? onChange : null;
 
-  // charge l’API + tente l’attach des inputs (si la lib arrive après, on ré-attache au focus)
   loadGoogleMaps();
   setupAllInputs();
 
@@ -161,7 +148,6 @@ export function initMapsBindings(onChange) {
   const deliveryDifferent = document.getElementById('deliveryDifferent');
   const deliveryWrap      = document.getElementById('deliveryAddressWrap');
 
-  // Synchro Admin: adresse de référence / barème km
   window.addEventListener('admin:transport-updated', () => {
     const pickupEl = document.getElementById('transportAddressPickup');
     const origin   = getCompanyOrigin();
@@ -177,7 +163,6 @@ export function initMapsBindings(onChange) {
     }
   }, { passive: true });
 
-  // Saisie manuelle distance
   if (manualToggle && distanceManual && distanceAutoBlock && !manualToggle.__bound) {
     manualToggle.__bound = true;
 
@@ -206,20 +191,17 @@ export function initMapsBindings(onChange) {
     });
   }
 
-  // Bouton "Recalculer avec Google"
   if (recalcBtn && !recalcBtn.__bound) {
     recalcBtn.__bound = true;
     recalcBtn.addEventListener('click', () => computeDistance(recomputeCb));
   }
 
-  // Sélecteur de mode transport
   if (modeSel && !modeSel.__bound) {
     modeSel.__bound = true;
     modeSel.addEventListener('change', () => {
       const val = modeSel.value;
 
       if (val === 'client') {
-        // Transport par le client → km = 0
         state.transport.mode = 'client';
         state.transport.pickKm = 0;
         state.transport.dropKm = 0;
@@ -227,9 +209,8 @@ export function initMapsBindings(onChange) {
         refreshDistanceUI();
         recomputeCb && recomputeCb();
       } else {
-        // Par nos soins → recalcule (ou conserve la valeur manuelle)
         state.transport.mode = 'baryc';
-        const manualOn    = !!manualToggle?.checked;
+        const manualOn = !!manualToggle?.checked;
 
         if (manualOn) {
           const n = Number(distanceManual?.value || 0);
@@ -237,7 +218,6 @@ export function initMapsBindings(onChange) {
           refreshDistanceUI();
           recomputeCb && recomputeCb();
         } else {
-          // Pré-remplit l'origine si besoin
           const pickupEl = document.getElementById('transportAddressPickup');
           if (pickupEl && !pickupEl.value.trim()) {
             const origin = getCompanyOrigin();
@@ -249,7 +229,6 @@ export function initMapsBindings(onChange) {
     });
   }
 
-  // "Utiliser l’adresse client comme adresse de récupération"
   if (sameAsClient && !sameAsClient.__bound) {
     sameAsClient.__bound = true;
     sameAsClient.addEventListener('change', () => {
@@ -266,7 +245,6 @@ export function initMapsBindings(onChange) {
     });
   }
 
-  // "Adresse de livraison différente"
   if (deliveryDifferent && !deliveryDifferent.__bound) {
     deliveryDifferent.__bound = true;
     deliveryDifferent.addEventListener('change', () => {
@@ -275,13 +253,12 @@ export function initMapsBindings(onChange) {
       } else {
         const d = document.getElementById('transportAddressDelivery');
         if (d) d.value = '';
-        computeDistance(recomputeCb); // recalc sans livraison
+        computeDistance(recomputeCb);
         deliveryWrap?.classList.add('hidden');
       }
     });
   }
 
-  // Premier état
   const isManual = !!manualToggle?.checked;
   const isBaryc  = (modeSel?.value || state?.transport?.mode) === 'baryc';
   if (isBaryc && !isManual) {
@@ -295,4 +272,26 @@ export function initMapsBindings(onChange) {
     refreshDistanceUI();
     recomputeCb && recomputeCb();
   }
+}
+
+
+// À AJOUTER quelque part après attachAutocomplete() et loadGoogleMaps()
+export function enablePlacesAutocomplete(input) {
+  if (!input) return;
+  // si l'API est prête : on attache direct
+  if (window.google && google.maps && google.maps.places) {
+    attachAutocomplete(input);
+    return;
+  }
+  // sinon on charge, puis on (ré)attache au prochain tour
+  loadGoogleMaps();
+  let tries = 0;
+  const tick = () => {
+    if (window.google && google.maps && google.maps.places) {
+      attachAutocomplete(input);
+    } else if (tries++ < 40) { // ~2s @50ms
+      setTimeout(tick, 50);
+    }
+  };
+  tick();
 }
