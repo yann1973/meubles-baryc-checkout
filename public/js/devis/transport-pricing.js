@@ -30,13 +30,13 @@ function kmf(n){ return nfKM.format(Math.max(0, num(n))); }
 export function bracketRawTTC(radiusKm) {
   const km = Math.max(0, num(radiusKm));
 
-  if (km <=  9.99) return { raw: 79.90,  label: '0–9,99 km (forfait 2 A/R)' };
-  if (km <= 19.99) return { raw: 99.90,  label: '10–19,99 km (forfait 2 A/R)' };
-  if (km <= 29.99) return { raw: 119.90, label: '20–29,99 km (forfait 2 A/R)' };
-  if (km <= 39.99) return { raw: 149.90, label: '30–39,99 km (forfait 2 A/R)' };
+  if (km <=  9.99) return { raw: 99.90,  label: '0–9,99 km (forfait 2 A/R)' };
+  if (km <= 19.99) return { raw: 119.90,  label: '10–19,99 km (forfait 2 A/R)' };
+  if (km <= 29.99) return { raw: 139.90, label: '20–29,99 km (forfait 2 A/R)' };
+  if (km <= 39.99) return { raw: 169.90, label: '30–39,99 km (forfait 2 A/R)' };
 
-  const raw = r2(149.90 + (km - 40) * 3.00);
-  return { raw, label: '≥ 40 km (149,90 € + 3,00 €/km au-delà, 2 A/R)' };
+  const raw = r2(169.90 + (km - 40) * 1.50);
+  return { raw, label: '≥ 40 km (169,90 € + 1,50 €/km au-delà, 2 A/R)' };
 }
 
 // ----------------- majoration logistique -----------------

@@ -49,6 +49,42 @@ export function computePricing(opts = {}) {
     goods: { ht: goodsHT, tva: goodsTVA, ttc: goodsTTC },
     transport: td, // { raw, rate, surcharge, ttc, label }
   };
+
+  (function computeTransport() {
+  const t = state.transport || {};
+  const mode = t.mode || 'client';
+
+  // Distances/rayons calculés par distance.js
+  const rPick = Number(t.pickRadiusKm || 0);
+  const rDrop = Number(t.dropRadiusKm || 0);
+
+  // Nombre d’articles dans le panier courant (pour majoration logistique)
+  const cartCount = Array.isArray(state.cart) ? state.cart.length : 1;
+
+  // Détail (raw/surcharge/ttc + libellés + rayons)
+  const det = calcOrderTransportDetailsFromRadii(rPick, rDrop, cartCount, mode);
+
+  // Place tout ce qu’il faut dans pricing.transport
+  pricing.transport = {
+    raw: det.raw,                 // base TTC (forfait/tranche)
+    surcharge: det.surcharge,     // maj logistique TTC
+    ttc: det.ttc,                 // total transport TTC
+    promoRate: det.rate || 0,     // on réutilise ce champ pour la maj (%)
+    label: det.label,             // ex: "10–19,99 km (forfait)"
+    info: det.info,               // "Barème par rayon …"
+    detail: det.detail,           // phrase détaillée à afficher
+    pickRadiusKm: det.pickRadiusKm,
+    dropRadiusKm: det.dropRadiusKm,
+    appliedRadiusKm: det.appliedRadiusKm,
+  };
+
+  // (facultatif) si tu conserves aussi une vue HT/TVA de la commande complète :
+  // pricing.totals.ttc = (pricing.goods.ttc || 0) + det.ttc;
+  // pricing.totals.tva = … ;
+  // pricing.totals.ht  = … ;
+})();
+
+
 }
 
 // Alias rétrocompat — pour le code qui appelle encore computeCR()

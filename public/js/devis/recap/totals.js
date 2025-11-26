@@ -14,82 +14,35 @@ const showDetailLine = (key, visible) => {
   document.querySelectorAll(`[data-t-detail-line="${key}"]`).forEach(el => { el.classList.toggle('hidden', !visible); });
 };
 
+
 export function renderTotals(pricing = {}) {
   const totals    = pricing?.totals    || {};
   const goods     = pricing?.goods     || {};
   const transport = pricing?.transport || {};
 
-  const surface      = Number(pricing?.totalSurface ?? 0) || 0;
-  const goodsHT      = Number(goods?.ht  ?? totals?.ht  ?? 0) || 0;
-  const goodsTVA     = Number(goods?.tva ?? totals?.tva ?? 0) || 0;
-  const goodsTTC     = Number(goods?.ttc ?? totals?.ttc ?? 0) || 0;
-  const transportTTC = Number(transport?.ttc ?? transport?.totalTTC ?? 0) || 0;
-  const grandTTC     = goodsTTC + transportTTC;
+  const surface = Number(pricing?.totalSurface ?? 0) || 0;
+  const goodsHT  = Number(goods?.ht  ?? totals?.ht  ?? 0) || 0;
+  const goodsTVA = Number(goods?.tva ?? totals?.tva ?? 0) || 0;
+  const goodsTTC = Number(goods?.ttc ?? totals?.ttc ?? 0) || 0;
+  const transportTTC = Number(transport?.ttc ?? 0) || 0;
+  const grandTTC = goodsTTC + transportTTC;
 
-  // Surface (IDs + data-attrs)
+  const set = (id, v) => { const el = document.getElementById(id); if (el) el.textContent = v; };
+  const setAll = (sel, v) => document.querySelectorAll(sel).forEach(el => el.textContent = v);
+
+  // Surface
   const surfTxt = `${surface.toFixed(2)} m²`;
-  set('totalSurface',  surfTxt);
-  set('surfaceDisplay',surfTxt);
+  set('totalSurface', surfTxt);
+  set('surfaceDisplay', surfTxt);
   setAll('[data-surface]', surfTxt);
 
-  // Totaux (sidebar)
+  // Totaux (nouveaux IDs sidebar)
   set('prixHT',  euro(goodsHT));
   set('prixTVA', euro(goodsTVA));
-  set('prixTTC', euro(grandTTC));
   set('prixTransport', euro(transportTTC));
+  set('prixTTC', euro(grandTTC));
 
-  // Info barème si dispo
-  const info = transport?.info || transport?.label || state?.transport?.info || '';
-  set('transportTarifInfo', info);
-
-  // ---- Détail transport : sidebar (IDs existants) + section Transport (data-attrs) ----
-  const d = state?.transport?.detailParts;
-  if (d) {
-    const pickKm  = d.pickARKm?.toFixed ? d.pickARKm.toFixed(1) : '0.0';
-    const delKm   = d.delARKm?.toFixed  ? d.delARKm.toFixed(1)  : '0.0';
-    const totKm   = d.totalKm?.toFixed  ? d.totalKm.toFixed(1)  : '0.0';
-    const base    = d.base || '';
-    const pickup  = d.pickup || '';
-    const delivery= d.delivery || '';
-
-    // Sidebar (IDs)
-    set('recapTransportPickKm',  pickKm);
-    set('recapTransportDelKm',   delKm);
-    set('recapTransportTotalKm', totKm);
-    set('recapTransportAtelier', base);
-    set('recapTransportPickup',  pickup);
-    set('recapTransportDelivery',delivery);
-    const sameOrEmpty = !delivery || delivery === pickup;
-    show('recapTransportDeliveryLine', !sameOrEmpty);
-
-    // Section Transport (data-attrs)
-    setDetail('pickKm',  pickKm);
-    setDetail('delKm',   delKm);
-    setDetail('totalKm', totKm);
-    setDetail('atelier', base);
-    setDetail('pickup',  pickup);
-    setDetail('delivery',delivery);
-    showDetailLine('delivery', !sameOrEmpty);
-  } else {
-    // reset léger
-    set('recapTransportPickKm','—');
-    set('recapTransportDelKm','—');
-    set('recapTransportTotalKm','—');
-    set('recapTransportAtelier','—');
-    set('recapTransportPickup','—');
-    set('recapTransportDelivery','—');
-    show('recapTransportDeliveryLine', false);
-
-    setDetail('pickKm','—');
-    setDetail('delKm','—');
-    setDetail('totalKm','—');
-    setDetail('atelier','—');
-    setDetail('pickup','—');
-    setDetail('delivery','—');
-    showDetailLine('delivery', false);
-  }
-
-  // Compat anciens IDs + data-attrs
+  // Compat anciens IDs
   set('totalHT',  euro(goodsHT));
   set('totalTVA', euro(goodsTVA));
   set('totalTTC', euro(goodsTTC));
@@ -97,19 +50,56 @@ export function renderTotals(pricing = {}) {
   set('goodsTTC', euro(goodsTTC));
   set('transportCost', euro(transportTTC));
 
-  setAll('[data-total="ht"]',  euro(goodsHT));
-  setAll('[data-total="tva"]', euro(goodsTVA));
-  setAll('[data-total="ttc"]', euro(goodsTTC));
+  // -------- DÉTAIL TRANSPORT (comme “avant”) --------
+  // Sidebar (IDs déjà présents dans ton partial)
+  set('transportTarifInfo', transport?.info || '');
+  set('recapTransportDetail', transport?.detail || '');
 
+  // Section Transport (si tu as ces IDs dans le partial de la carte Transport)
+  const box = document.getElementById('transportDetailsBox');
+  const infoEl = document.getElementById('transportInfo');
+  const brkEl  = document.getElementById('transportBreakdown');
+
+  if (box && (transport?.info || transport?.detail)) {
+    box.classList.remove('hidden');
+    if (infoEl) infoEl.textContent = transport.info || '';
+    if (brkEl)  brkEl.textContent  = transport.detail || '';
+  } else if (box) {
+    box.classList.add('hidden');
+    if (infoEl) infoEl.textContent = '';
+    if (brkEl)  brkEl.textContent  = '';
+  }
+
+  // Promo/maj affichée si tu l’utilises encore
   if (typeof transport?.promoRate === 'number') {
     const promoTxt = transport.promoRate ? `${Math.round(transport.promoRate * 100)} %` : '0 %';
     set('promoRate', promoTxt);
     setAll('[data-transport="promoRate"]', promoTxt);
   }
-  if (typeof transport?.surcharge === 'number') {
-    set('transportSurcharge', euro(Number(transport.surcharge || 0)));
-  }
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 export function clearRecap() {
   const zero = (id) => { const el = document.getElementById(id); if (el) el.textContent = euro(0); };
