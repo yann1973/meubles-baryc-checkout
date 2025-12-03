@@ -135,3 +135,37 @@ export function resetConfig() {
 
 // (optionnel) export des defaults pour introspection
 export const DEFAULT_CONFIG = DEFAULTS;
+
+
+// public/js/config/index.js  (AJOUT)
+
+// Upsert des prestations dans la config admin (aucun écrasement des existantes)
+// services: [{ key, label }]
+export function upsertServices(services) {
+  if (!Array.isArray(services) || services.length === 0) return loadConfig();
+
+  const cfg = loadConfig();
+  if (!cfg.services) cfg.services = {};
+  if (!cfg.services.catalog) cfg.services.catalog = {};
+
+  let added = 0;
+  for (const s of services) {
+    const key = String(s?.key || '').trim();
+    if (!key) continue;
+    if (!cfg.services.catalog[key]) {
+      cfg.services.catalog[key] = { label: (s?.label || key).trim() };
+      added++;
+    }
+  }
+
+  if (added > 0) {
+    saveConfig(cfg);
+    applyConfig(cfg);
+    // Notifie l’admin/CR + tout le monde
+    try {
+      window.dispatchEvent(new CustomEvent('admin:services-updated', { detail: { added, catalog: cfg.services.catalog } }));
+      window.dispatchEvent(new CustomEvent('admin:config-updated',   { detail: cfg }));
+    } catch {}
+  }
+  return cfg;
+}

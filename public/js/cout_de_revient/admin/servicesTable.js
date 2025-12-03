@@ -100,3 +100,13 @@ export function renderServicesAdmin(){
     });
   }
 }
+
+window.addEventListener('admin:services-updated', () => {
+  try {
+    const cfg = loadConfig();
+    // re-render ta table ici à partir de cfg.services.catalog
+    renderServicesTableFromConfig(cfg); // <-- ta fonction de rendu actuelle
+  } catch (e) {
+    console.warn('[admin] refresh services table failed:', e);
+  }
+});
